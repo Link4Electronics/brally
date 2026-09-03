@@ -101,7 +101,8 @@ public:
     int (*pfn0C)(BrCtl *);          /* +0x0C */
     int (*pfn10)(BrCtl *);          /* +0x10 */
     int (*pfn14)(BrCtl *);          /* +0x14 */
-    char pad18[0x2AB4 - 0x18];      /* +0x18 */
+    int (*pfn18)(BrCtl *);          /* +0x18 */
+    char pad1C[0x2AB4 - 0x1C];      /* +0x1C */
     short w2AB4;                    /* +0x2AB4 */
     short w2AB6[0x19];              /* +0x2AB6 */
     char pad2AE8[0x3838 - 0x2AE8];  /* +0x2AE8 */
