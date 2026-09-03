@@ -55,6 +55,7 @@ class Root48F10 {
 public:
     char            pad000[0xC0];
     SlotTable48F10 *pTable;         /* +0xC0 */
+    SlotTable48F10 *pTableC4;       /* +0xC4 */
 };
 
 
