@@ -165,9 +165,6 @@ typedef char chk_tbl04F8C0[(unsigned)&((Root04F8C0 *)0)->pTable == 0xC0 ? 1 : -1
 typedef int (*CtlFn)(BrCtl *);
 
 extern "C" {
-extern float DAT_1007765c;
-extern float DAT_10077658;
-extern char DAT_10ac3e80;
 BrCtl *DAT_10ac5d40;
 int BrCarNameCommit();
 int BrOpt3F50();
@@ -178,6 +175,9 @@ int BrUiHook85_10042AC0();
 extern char  DAT_100aabe8;
 extern char  DAT_100aaca8;
 extern char  DAT_10396f08;
+extern char  DAT_10ac3e80;
+extern float DAT_10077658;
+extern float DAT_1007765c;
 char *BrStrGet(int);
 void FUN_100378c0(int);
 }
@@ -245,14 +245,14 @@ int BrOptFn10056A10(GameUi *parent)
     p->s34(&DAT_10396f08, 1, 1, &DAT_100aabe8);
     strcpy(p->m2B5C.szName, &DAT_10ac3e80);
     p->m2B5C.s1();
-    p->f050 = 0x9B;
-    p->m2B5C.a424[0] = 0x9B;
-    p->f058 = 0x15B;
-    p->m2B5C.a424[2] = 0x15B;
-    p->f054 = 0xAC;
-    p->m2B5C.a424[1] = 0xAC;
-    p->f05C = 0xBC;
-    p->m2B5C.a424[3] = 0xBC;
+    p->f050 = 0x9b;
+    p->m2B5C.a424[0] = 0x9b;
+    p->f058 = 0x15b;
+    p->m2B5C.a424[2] = 0x15b;
+    p->f054 = 0xac;
+    p->m2B5C.a424[1] = 0xac;
+    p->f05C = 0xbc;
+    p->m2B5C.a424[3] = 0xbc;
     p->m2B5C.w41C = (short)(p->m2B5C.a424[2] - p->m2B5C.a424[0]) - 0x10;
     cont->w14 += 1;
     cont->w344 += 1;
