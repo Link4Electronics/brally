@@ -65,46 +65,31 @@ void __fastcall BrEntSetVel(uint8_t *pCar, float x, float y, float z);
 void __fastcall BrEntSetMatrix(uint8_t *pCar, int unused, void *pSrc);
 void BrModelSlotApply(uint8_t *pCar, void *pDrv);
 
+static __inline void V3Copy(float *d, float *s)
+{
+  d[0] = s[0];
+  d[1] = s[1];
+  d[2] = s[2];
+}
+
 /* WHAT IT DOES: for this car, score every driver slot by wrapped along-track
  * delta plus world distance, sort the others by that score, then for each of
  * two groups copy lap, gate and pose from attached cars onto the driver
  * record (the "saving lap/gate" trace) and write them back onto empty slots
  * of the same group (the "restoring lap/gate" trace). */
-/* RESIDUE: frame sub esp,0xd8, this in ebp, count test is jle, one shared
- * dist call. Size 2076/2104 B, insn gap 15, rows 31+16, 18 regions.
- * Three non-respellable walls, each read out of the disassembly:
- *   1. x87 stack scheduling in the along-track score -- the original hoists
- *      fild (float)local_cc ahead of the fsub, yielding fxch st(2) x4; every
- *      commuted spelling of the (a-b)+cc*d expression rebuilds ours with
- *      fxch st(1) x3 (probe w3).  TU-state driven; respelling is dead.
- *   2. cmp-fold allocation: orig `mov r,[DAT_100b3858]; cmp r,r`, ours folds
- *      to `cmp r,[DAT_100b3858]`.  Hoisting the read to one loop-top local
- *      (probe w2) is CSE'd straight back -- pure register-pressure choice.
- *   3. shared BrVec3Dist tail: orig push/add arm vs our lea arm (VC5).
- * A5 oracle: EQUIVALENT.  Dead store `local_cc = 0` removed this pass (it was
- * overwritten before every read; slot reused as the save-group array base). */
-/* @t4-pass 0x1005F6C0 1 2026-09-10 probes 20 bytes 2080 insns 548 regions 18 rows 46 census yes */
-/* @t4-pass 0x1005F6C0 2 2026-09-10 probes 11 bytes 2080 insns 548 regions 18 rows 46 census yes */
-/* @t4-pass 0x1005F6C0 3 2026-09-20 probes 14 bytes 2076 insns 547 regions 18 rows 47 census yes */
-/* @t4-pass 0x1005F6C0 4 2026-09-20 probes 11 bytes 2076 insns 547 regions 18 rows 47 census no */
-/* @t3 0x1005F6C0 2026-09-20 -- CERTIFIED COMPLETE, NOT BYTE-EXACT.
- * @t3-measure bytes 2076/2104 insns 547/562 rows 31+16 regions 18 oracle EQUIVALENT
- * @t3-effort passes 4 zero-movement 3 4
- * Residue is x87 scheduling + register allocation only (walls 1-3 above);
- * A5 oracle EQUIVALENT is the completeness proof (project rule 12).
- * Do not reopen before the end-grind. */
-/* @implements 0x1005F6C0 glide BrLapSaveRestore */
+/* C-lane twin of src/core/cpp/0x1005F6C0.cpp, kept in step with it.  Not
+ * tagged: the original is a C++ member (BrEntSetMatrix is a two-argument
+ * thiscall), and the __fastcall shim here costs a dummy `xor edx,edx` the
+ * original does not have, so this body cannot go byte-exact from C. */
 void BR_THISCALL1 BrLapSaveRestore(uint8_t *pCar)
 {
   float *pfVar1;
-  unsigned char uVar2;
-  unsigned char uVar3;
-  int uVar4;
-  int uVar5;
+  unsigned int uTintB;
+  unsigned int uTintG;
+  unsigned int uTintR;
   int iVar6;
   uint8_t *pfVar7;
   int bVar8;
-  int *piVar9;
   int iVar10;
   int iVar11;
   float *pfVar12;
@@ -116,8 +101,6 @@ void BR_THISCALL1 BrLapSaveRestore(uint8_t *pCar)
   union { float f; int i; } local_d4;
   int local_d0;
   int local_cc;
-  float *local_c8;
-  float *local_c4;
   int local_c0;
   uint8_t *local_bc;
   char local_b8[12];
@@ -134,67 +117,43 @@ void BR_THISCALL1 BrLapSaveRestore(uint8_t *pCar)
     do {
       iVar10 = piVar14[-1];
       if (iVar10 != 0) {
-        if (iVar10 != (int)pCar) {
-          iVar13 = *(int *)(iVar10 + 0x140);
-          iVar15 = DAT_100b3858;
-          if (iVar13 < iVar15) {
-            *pfVar12 = 1e+10f;
-            goto LAB_next;
-          }
+        if ((iVar10 != (int)pCar) && (*(int *)(iVar10 + 0x140) < DAT_100b3858)) {
+          *pfVar12 = 1e+10f;
         }
-        if (DAT_100a9360 != 0)
-          goto LAB_comp_car;
-        iVar13 = *(int *)(iVar10 + 0x140);
-        iVar15 = DAT_100b3858;
-        if (iVar13 < iVar15)
-          goto LAB_comp_car;
-        if ((*(unsigned char *)(*(int *)(iVar10 + 0xf00) + 0x68) & 2) == 0)
-          goto LAB_comp_car;
-        if (*(unsigned char *)(iVar10 + 0x29af) != 2)
-          goto LAB_comp_car;
-        if (*(float *)(iVar10 + 0x29b0) != 0.0f)
-          goto LAB_comp_car;
-        *pfVar12 = 1e+09f;
-        goto LAB_next;
-LAB_comp_car:
-        local_cc = *(int *)(iVar10 + 0xfac) - *(int *)(pCar + 0xfac);
-        local_d8 = (*(float *)(pCar + 0xff4) - *(float *)(iVar10 + 0xff4)) +
-                   (float)local_cc * local_d4.f;
-        if (!(local_d8 <= local_d4.f * 0.5f)) {
-          local_d8 = local_d8 - local_d4.f;
-          iVar10 = iVar10 + 0x30;
-        } else {
-          if (local_d8 < local_d4.f * -0.5f) {
+        else if (((DAT_100a9360 == 0) &&
+                 (*(int *)(iVar10 + 0x140) >= DAT_100b3858)) &&
+                (((*(unsigned char *)(*(int *)(iVar10 + 0xf00) + 0x68) & 2) != 0 &&
+                 ((*(unsigned char *)(iVar10 + 0x29af) == 2 &&
+                  (*(float *)(iVar10 + 0x29b0) == 0.0f)))))) {
+          *pfVar12 = 1e+09f;
+        }
+        else {
+          local_d8 = (*(float *)(pCar + 0xff4) - *(float *)(iVar10 + 0xff4)) +
+                     (float)(*(int *)(iVar10 + 0xfac) - *(int *)(pCar + 0xfac)) * local_d4.f;
+          if (!(local_d8 <= local_d4.f * 0.5f)) {
+            local_d8 = local_d8 - local_d4.f;
+          }
+          else if (local_d8 < local_d4.f * -0.5f) {
             local_d8 = local_d4.f + local_d8;
           }
-          iVar10 = iVar10 + 0x30;
+          *pfVar12 = local_d8 * local_d8 + BrVec3Dist(pCar + 0x30, (void *)(iVar10 + 0x30));
         }
-        goto LAB_score;
       }
-      if (DAT_100a9360 != 0)
-        goto LAB_comp_empty;
-      iVar13 = *piVar14;
-      iVar15 = DAT_100b3858;
-      if (iVar13 < iVar15)
-        goto LAB_comp_empty;
-      if ((*(unsigned char *)(piVar14 + 1) & 2) == 0)
-        goto LAB_comp_empty;
-      *pfVar12 = 1e+09f;
-      goto LAB_next;
-LAB_comp_empty:
-      local_cc = piVar14[-8] - *(int *)(pCar + 0xfac);
-      local_d8 = (*(float *)(pCar + 0xff4) - *(float *)&piVar14[-5]) +
-                 (float)local_cc * local_d4.f;
-      if (!(local_d8 <= local_d4.f * 0.5f)) {
-        local_d8 = local_d8 - local_d4.f;
+      else if (((DAT_100a9360 == 0) && (*piVar14 >= DAT_100b3858)) &&
+              ((*(unsigned char *)(piVar14 + 1) & 2) != 0)) {
+        *pfVar12 = 1e+09f;
       }
-      else if (local_d8 < local_d4.f * -0.5f) {
-        local_d8 = local_d4.f + local_d8;
+      else {
+        local_d8 = (*(float *)(pCar + 0xff4) - *(float *)&piVar14[-5]) +
+                   (float)(piVar14[-8] - *(int *)(pCar + 0xfac)) * local_d4.f;
+        if (!(local_d8 <= local_d4.f * 0.5f)) {
+          local_d8 = local_d8 - local_d4.f;
+        }
+        else if (local_d8 < local_d4.f * -0.5f) {
+          local_d8 = local_d4.f + local_d8;
+        }
+        *pfVar12 = local_d8 * local_d8 + BrVec3Dist(pCar + 0x30, piVar14 + -0x19);
       }
-      iVar10 = (int)(piVar14 + -0x19);
-LAB_score:
-      *pfVar12 = local_d8 * local_d8 + BrVec3Dist(pCar + 0x30, (int *)iVar10);
-LAB_next:
       *(int *)(pfVar12 + 1) = local_d0;
       local_d0 = local_d0 + 1;
       piVar14 = piVar14 + 0x20;
@@ -207,23 +166,21 @@ LAB_next:
     local_d8 = local_a0[iVar10 * 2];
     local_a0[iVar10 * 2] = local_a0[0];
     *(int *)(local_a0 + 1) = iVar10;
-    *(int *)(local_a0 + iVar10 * 2 + 1) = 0;
     local_a0[0] = local_d8;
+    *(int *)(local_a0 + iVar10 * 2 + 1) = 0;
     qsort(local_a0 + 2, DAT_100b2f00 - 1, 8, BrRankCmpKey);
   }
-  local_c0 = 0;
+  iVar10 = 0;
+  local_c0 = iVar10;
   do {
     iVar11 = 0;
     bVar8 = 1;
     local_d0 = 0;
     local_d4.i = 0;
-    iVar10 = local_c0;
     if (DAT_100b2f00 <= 0) {
     } else {
-      local_c4 = (float *)&local_cc;
-      local_c8 = local_a0;
       do {
-        puVar16 = &DAT_10af07f8 + *(int *)(local_c8 + 1) * 0x20;
+        puVar16 = &DAT_10af07f8 + *(int *)(local_a0 + local_d0 * 2 + 1) * 0x20;
         if (puVar16[0x1d] == iVar10) {
           iVar13 = puVar16[0x19];
           iVar6 = DAT_100b3858;
@@ -237,7 +194,6 @@ LAB_next:
                  ((*(unsigned char *)(iVar15 + 0x29af) == 2 &&
                   (*(float *)(iVar15 + 0x29b0) == 0.0f)))) {
 LAB_save:
-                bVar8 = 0;
                 puVar16[0] = *(int *)(iVar15 + 0x30);
                 puVar16[1] = *(int *)(iVar15 + 0x34);
                 puVar16[2] = *(int *)(iVar15 + 0x38);
@@ -253,21 +209,18 @@ LAB_save:
                 puVar16[15] = *(int *)(iVar15 + 0xff0);
                 puVar16[16] = *(int *)(iVar15 + 0xfa8);
                 puVar16[17] = *(int *)(iVar15 + 0xfac);
-                uVar4 = *(int *)(iVar15 + 0xfa0);
-                puVar16[18] = uVar4;
-                uVar5 = *(int *)(iVar15 + 0xfa4);
-                puVar16[19] = uVar5;
+                puVar16[18] = *(int *)(iVar15 + 0xfa0);
+                puVar16[19] = *(int *)(iVar15 + 0xfa4);
                 BrPodNop("saving lap (%d/%d) and gate (%d/%d)\n",
-                         puVar16[16], puVar16[17], uVar4, uVar5);
-                iVar10 = local_c0;
+                         puVar16[16], puVar16[17], puVar16[18], puVar16[19]);
                 iVar6 = puVar16[0x18];
                 puVar16[20] = *(int *)(iVar15 + 0xff4);
                 puVar16[21] = *(int *)(iVar15 + 0xff8);
+                iVar10 = local_c0;
+                (&local_cc)[iVar11] = iVar6;
                 iVar11 = iVar11 + 1;
                 puVar16[0x18] = 0;
-                *(int *)local_c4 = iVar6;
                 *(int *)(iVar15 + 0xf00) = 0;
-                local_c4 = local_c4 + 1;
                 *(int *)(iVar15 + 0xf04) = 0x3c;
               }
             }
@@ -276,37 +229,32 @@ LAB_save:
             iVar15 = puVar16[0x18];
             if (iVar15 != 0) {
               bVar8 = 0;
-              if ((*(int *)(iVar15 + 0xf04) == 0) && (DAT_10077990 < *local_c8))
+              if ((*(int *)(iVar15 + 0xf04) == 0) && (DAT_10077990 < local_a0[local_d0 * 2]))
                 goto LAB_save;
             }
           }
         }
         local_d0 = local_d0 + 1;
-        local_c8 = local_c8 + 2;
       } while (local_d0 < DAT_100b2f00);
     }
     if (bVar8) {
+      (&local_cc)[iVar11] = (int)(&DAT_10af1208 + (iVar10 + DAT_100b3858) * 0xada);
       iVar11 = iVar11 + 1;
-      (&local_d0)[iVar11] = (int)(&DAT_10af1208 + (iVar10 + DAT_100b3858) * 0xada);
     }
     local_d0 = 0;
-    if (iVar11 != 0) {
-      local_c4 = local_a0 + 1;
-      piVar14 = &local_cc + iVar11;
-      local_c8 = (float *)(local_bc + 0xeb0);
-      do {
-        if (DAT_100b2f00 <= local_d0) break;
-        puVar16 = &DAT_10af07f8 + *(int *)local_c4 * 0x20;
+    while (iVar11 != 0) {
+      {
+        if (local_d0 >= DAT_100b2f00) break;
+        puVar16 = &DAT_10af07f8 + *(int *)(local_a0 + local_d0 * 2 + 1) * 0x20;
         if (((puVar16[0x1d] == iVar10) &&
             (!(puVar16[0x19] < DAT_100b3858))) &&
            (((*((unsigned char *)puVar16 + 0x68) & 2) == 0 &&
             (puVar16[0x18] == 0)))) {
-          pfVar7 = (uint8_t *)piVar14[-1];
-          piVar14 = piVar14 + -1;
+          iVar11 = iVar11 + -1;
+          pfVar7 = (uint8_t *)(&local_cc)[iVar11];
           puVar16[0x18] = (int)pfVar7;
           *(int *)(pfVar7 + 0x1030) = puVar16[9];
           *(int *)(pfVar7 + 0xf8c) = puVar16[10];
-          iVar11 = iVar11 + -1;
           *(int *)(pfVar7 + 0xf90) = puVar16[11];
           *(int *)(pfVar7 + 0xfb0) = puVar16[12];
           *(int *)(pfVar7 + 0xfe4) = puVar16[13];
@@ -314,13 +262,11 @@ LAB_save:
           *(int *)(pfVar7 + 0xff0) = puVar16[15];
           *(int *)(pfVar7 + 0xfa8) = puVar16[16];
           *(int *)(pfVar7 + 0xfac) = puVar16[17];
-          uVar4 = puVar16[18];
-          *(int *)(pfVar7 + 0xfa0) = uVar4;
-          uVar5 = puVar16[19];
-          *(int *)(pfVar7 + 0xfa4) = uVar5;
+          *(int *)(pfVar7 + 0xfa0) = puVar16[18];
+          *(int *)(pfVar7 + 0xfa4) = puVar16[19];
           BrPodNop("restoring lap (%d/%d) and gate (%d/%d)\n",
                    *(int *)(pfVar7 + 0xfa8),
-                   *(int *)(pfVar7 + 0xfac), uVar4, uVar5);
+                   *(int *)(pfVar7 + 0xfac), *(int *)(pfVar7 + 0xfa0), *(int *)(pfVar7 + 0xfa4));
           *(int *)(pfVar7 + 0xff4) = puVar16[20];
           *(int *)(pfVar7 + 0xff8) = puVar16[21];
           *(int **)(pfVar7 + 0xf00) = puVar16;
@@ -338,11 +284,12 @@ LAB_save:
                       *(float *)(puVar16 + 2) - -0.1f);
           pfVar7[0x29af] = 0;
           *(float *)(pfVar7 + 0x29b0) = 1.0f;
-          uVar2 = *((unsigned char *)puVar16 + 0x5e);
-          uVar3 = *((unsigned char *)puVar16 + 0x5d);
-          pfVar7[0x29ac] = *((unsigned char *)puVar16 + 0x5c);
-          pfVar7[0x29ad] = uVar3;
-          pfVar7[0x29ae] = uVar2;
+          uTintB = *((unsigned char *)puVar16 + 0x5e);
+          uTintG = *((unsigned char *)puVar16 + 0x5d);
+          uTintR = *((unsigned char *)puVar16 + 0x5c);
+          pfVar7[0x29ac] = (uint8_t)uTintR;
+          pfVar7[0x29ad] = (uint8_t)uTintG;
+          pfVar7[0x29ae] = (uint8_t)uTintB;
           BrModelSlotApply(pfVar7, puVar16);
           iVar10 = *(int *)(pfVar7 + 0xf8c) + *(int *)(pfVar7 + 0xf90) * 0x28;
           BrVec3Sub(local_b8, (void *)(iVar10 + 0x40), (void *)(iVar10 + 0x4c));
@@ -356,18 +303,16 @@ LAB_save:
           BrVec3NormaliseGuard(pfVar7 + 0x20);
           BrVec3Cross(pfVar1, (float *)(pfVar7 + 0x20), pfVar7);
           BrVec3NormaliseGuard(pfVar1);
-          *(int *)(pfVar7 + 0xf94) = *(int *)pfVar7;
-          *(int *)(pfVar7 + 0xf98) = *(int *)(pfVar7 + 4);
-          *(int *)(pfVar7 + 0xf9c) = *(int *)(pfVar7 + 8);
+          V3Copy((float *)(pfVar7 + 0xf94), (float *)pfVar7);
           BrEntSetMatrix(pfVar7, 0, pfVar7);
-          if ((*(unsigned char *)(*(int *)(pfVar7 + 0xf00) + 0x68) & 1) == 0) {
+          if ((*(unsigned char *)(*(int *)(pfVar7 + 0xf00) + 0x68) & 1) != 0) {
+            BrEntSetVel(pfVar7, 0.0f, 0.0f, 0.0f);
+          }
+          else {
             BrEntSetVel(pfVar7,
                         *(float *)pfVar7 * 50.0f,
                         *(float *)(pfVar7 + 4) * 50.0f,
                         *(float *)(pfVar7 + 8) * 50.0f);
-          }
-          else {
-            BrEntSetVel(pfVar7, 0.0f, 0.0f, 0.0f);
           }
           *(int *)(*(int *)(pfVar7 + 0x168) + 0x19c) = 0;
           *(int *)(*(int *)(pfVar7 + 0x168) + 0x1b4) = 0;
@@ -389,18 +334,13 @@ LAB_save:
           *(int *)(pfVar7 + 0xe20) = 0;
           iVar10 = local_c0;
         }
-        iVar13 = *(int *)local_c4;
-        local_c4 = local_c4 + 2;
-        *(int *)local_c8 = (int)(&DAT_10af07f8 + iVar13 * 0x20);
+        *(int *)(local_bc + 0xeb0 + local_d0 * 4) = (int)(&DAT_10af07f8 + *(int *)(local_a0 + local_d0 * 2 + 1) * 0x20);
         local_d0 = local_d0 + 1;
-        local_c8 = local_c8 + 1;
-      } while (iVar11 != 0);
+      }
     }
-    local_c0 = iVar10 + 1;
-    if (local_c0 >= 2) {
-      return;
-    }
-  } while (1);
+    iVar10 = iVar10 + 1;
+    local_c0 = iVar10;
+  } while (iVar10 < 2);
 }
 
 #endif /* BR_MATCHING_BUILD */
