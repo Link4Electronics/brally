@@ -42,9 +42,9 @@ float BrPowf(float a, float b)
 
 /* WHAT IT DOES: cross product -- out = a x b.  Two components are copied to
  * the stack first, so out may alias a or b. */
-/* @t4-pass 0x8022439C 1 2026-09-26 compiles 17 best 24 moved 0  (n64/tools/n64permute.py) */
-/* @t4-pass 0x8022439C 2 2026-09-26 compiles 17 best 24 moved 0  (n64/tools/n64permute.py) */
-/* @t4-pass 0x8022439C 3 2026-09-26 compiles 17 best 24 moved 0  (n64/tools/n64permute.py) */
+/* @t4-pass 0x8022439C 1 2026-09-26 compiles 17 best 24 moved 0  (tools/tgrally/n64permute.py) */
+/* @t4-pass 0x8022439C 2 2026-09-26 compiles 17 best 24 moved 0  (tools/tgrally/n64permute.py) */
+/* @t4-pass 0x8022439C 3 2026-09-26 compiles 17 best 24 moved 0  (tools/tgrally/n64permute.py) */
 /* @t3 0x8022439C */
 /* @implements 0x8022439C tgr BrVec3Cross */
 void BrVec3Cross(BrVec3 *pOut, BrVec3 *pA, BrVec3 *pB)
@@ -362,8 +362,8 @@ float BrVec3LenXY(BrVec3 *pV)
  * NEVER RUN IN THE RETAIL GAME: nothing in the ROM refers to 0x80224B7C -- no
  * jal to it, no lui/addiu pair forming its address (n64rom xref: none), and
  * no data word holding it (the whole ROM searched for the value). */
-/* @t4-pass 0x80224B7C 1 2026-10-03 compiles 119 best 63 moved 0  (n64/tools/n64permute.py) */
-/* @t4-pass 0x80224B7C 2 2026-10-03 compiles 116 best 63 moved 0  (n64/tools/n64permute.py) */
+/* @t4-pass 0x80224B7C 1 2026-10-03 compiles 119 best 63 moved 0  (tools/tgrally/n64permute.py) */
+/* @t4-pass 0x80224B7C 2 2026-10-03 compiles 116 best 63 moved 0  (tools/tgrally/n64permute.py) */
 /* @implements 0x80224B7C tgr BrVec3RotateAxis */
 void BrVec3RotateAxis(BrVec3 *pV, float a, BrVec3 *pK)
 {

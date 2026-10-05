@@ -1,4 +1,4 @@
-/* vec.h -- 3-vector math (n64/src/geometry/vec.c). */
+/* vec.h -- 3-vector math (src/tgrally/geometry/vec.c). */
 #ifndef TGR_VEC_H
 #define TGR_VEC_H
 #include "tgr/common.h"
