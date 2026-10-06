@@ -6,7 +6,7 @@
  * it once per candidate surface, so it is spatial arithmetic and not part of
  * any one caller's subsystem.
  *
- * Moved out of src/core/slice1_06.c (an address batch) unchanged. The
+ * Moved out of src/brally/core/slice1_06.c (an address batch) unchanged. The
  * preamble below is carried over verbatim from that file, including the
  * matching-build renames: they decide the set of names the translation unit
  * sees, and trimming them changes the compiler's view of the code.

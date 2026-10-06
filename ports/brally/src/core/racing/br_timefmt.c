@@ -17,7 +17,7 @@
  * The split is spelled exactly as BrHudDrawTimeEntry (0x10014760) spells
  * it: a named quotient and a compound `-=` mul-back for each remainder is
  * what makes VC5 emit the magic-multiply divides and the lea/neg chains
- * instead of one `idiv` per pair (docs/VC5-IDIOMS.md, "div/mod-by-constant
+ * instead of one `idiv` per pair (docs/brally/VC5-IDIOMS.md, "div/mod-by-constant
  * pairs"). */
 /* @implements 0x100023F0 glide BrTimeFormat */
 void BrTimeFormat(char *psz, float t)

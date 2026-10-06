@@ -3,7 +3,7 @@
  * RESPONSIBILITY: reading what the player is doing -- specifically the block
  * that records which key, button or axis each action is bound to.
  *
- * Moved here out of src/core/slice3_42.c (an address batch, not a module).
+ * Moved here out of src/brally/core/slice3_42.c (an address batch, not a module).
  */
 #include "slice3_42.h"
 #include "br_objlife.h"   /* BrAtexit_10069A70 -- 0x10069A70 */

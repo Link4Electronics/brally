@@ -3,7 +3,7 @@
  * RESPONSIBILITY: geometry -- the arithmetic that moves positions around.
  * This is the truncation the span and grid code rounds its coordinates with.
  *
- * Moved here out of src/core/slice6_74.c (an address batch, not a module).
+ * Moved here out of src/brally/core/slice6_74.c (an address batch, not a module).
  */
 #include <stdint.h>
 

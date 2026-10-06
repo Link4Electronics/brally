@@ -19,7 +19,7 @@
 /* NO TABLE POINTER.  The original indexes a FIXED-ADDRESS array --
  * `fld dword ptr [eax*4 + 0x106EC4F8]`, an absolute base with no register --
  * and reads only two arguments, i at [ebp+8] and amt at [ebp+0xc].  The
- * `float *aTable` first parameter never existed; see tools/screen_absglobals.py
+ * `float *aTable` first parameter never existed; see tools/brally/screen_absglobals.py
  * for the rest of this class.  The element count is not established: nothing
  * in the tree calls this yet, so the array stays incomplete rather than
  * carrying a guessed bound. */

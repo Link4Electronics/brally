@@ -150,7 +150,7 @@ void BrRbAccumChildForces(BrRbBodyFull *pParent, BrRbBodyFull *pChild)
  * attached to it are folded in too, but only sideways and forwards: the
  * up-and-down direction ignores them entirely, which looks like an oversight
  * in the original rather than an intention. */
-/* Byte-exact 2026-09-07 (tools/crank.py): the three stores of the rotated
+/* Byte-exact 2026-09-07 (tools/brally/crank.py): the three stores of the rotated
  * force are in x, y, z order and the function sits at the END of its TU --
  * in slice3_42.c the z, x, y order the old comment defended and its
  * mid-file position were the 14-byte residue. */

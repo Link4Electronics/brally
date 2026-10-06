@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 #include "slice3_44.h"   /* BrMat3 / BrMat4 / BrVec3, for the routines moved
-                          * here out of src/core/slice3_44.c                */
+                          * here out of src/brally/core/slice3_44.c                */
 
 
 
@@ -158,7 +158,7 @@ void BrMat4ToMat3Both(BrMat3 *pTransposed, BrMat3 *pStraight,
  * and into the world: the box's rotation transposed, each column stretched by
  * that axis's scale, and the translation carried across as the source's
  * position rotated back through the transpose and negated. Callers hand it
- * the SAME frame as source and destination -- see include/br_collresp.h --
+ * the SAME frame as source and destination -- see src/brally/include/br_collresp.h --
  * so the two stores per element are not a redundant pair. */
 /* @implements 0x1006DDD0 glide BrMat4BuildScaledTransposed */
 void BrMat4BuildScaledTransposed(const BrMat4 *pS, BrMat4 *pOut,

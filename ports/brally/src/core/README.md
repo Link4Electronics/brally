@@ -52,15 +52,15 @@ The `sliceN_MM.c` files were a **batch of whatever occupied one address range**
 in the original: a decompilation-process artifact, not an architecture. Every
 matched function was filed out of them into its module. What remained was the
 port's BRD3D-era transcription plus dead copies of bodies already matched
-elsewhere, so on 2026-09-28 all 56 moved to `ports/macos/legacy/`. Their
-headers (`include/sliceN_MM.h`) stay: matched modules include them, and the
+elsewhere, so on 2026-09-28 all 56 moved to `ports/brally-wasm/legacy/`. Their
+headers (`src/brally/include/sliceN_MM.h`) stay: matched modules include them, and the
 declarations they carry are part of those modules' translation units.
 
-## src/ is the decomp and nothing else
+## src/brally/ is the decomp and nothing else
 
 Port code (a body that exists only so the Mac build runs) lives under
-`ports/macos/`, never here, and so does every difference the port needs from
-a module here: a spec in `ports/macos/patch/`, not a `BR_MATCHING_BUILD`
+`ports/brally-wasm/`, never here, and so does every difference the port needs from
+a module here: a spec in `ports/brally-wasm/patch/`, not a `BR_MATCHING_BUILD`
 conditional. See `ports/README.md`.
 
 ## Rules
@@ -68,6 +68,6 @@ conditional. See `ports/README.md`.
 - A new module goes in a responsibility folder. Never add a `sliceN_MM.c`.
 - Every banner states the responsibility it serves and what the module does;
   every function carries its original address and a description of behaviour.
-- `build.sh` discovers `src/core/**/*.c` recursively and names objects by
-  path; `build.d/*.deps` name modules by basename, so a module changes folder
+- `build.sh` discovers `src/brally/core/**/*.c` recursively and names objects by
+  path; `tests/brally/deps/*.deps` name modules by basename, so a module changes folder
   without touching them.
