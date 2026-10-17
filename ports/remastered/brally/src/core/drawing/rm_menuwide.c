@@ -10,6 +10,12 @@
  * and the LFB write places the wide picture centred on the game's
  * (grLfbWriteRegion).
  *
+ * The keys (and a controller, its d-pad and stick the arrows: race_handoff.c)
+ * choose a page's row only while the pointer is off the rows, the pointer
+ * winning wherever it is (BrUiNavCtlHit_10047A60).  So an arrow or Return
+ * puts the pointer away, off every row and not drawn (rm_menu_nav,
+ * BrGlNavPoll; BrSprFontDraw), until the mouse moves or presses again.
+ *
  * The backdrop (work1a.bmp, every page's first sprite, the whole 640x480)
  * is widened rather than boxed: its edges are black, and its two vertical
  * bars (columns 156-191, dark to light, and 313-348, light to dark: a pair
@@ -166,3 +172,31 @@ int rm_menu_backdrop(int x, int y, struct BrSurf *src, const int *rect)
     BrUiSprBlit(dst, 0, 0, s_bd.wide, full, 0);
     return 1;
 }
+
+/* ---- the keys and the pointer ---------------------------------------------- */
+extern int plat_pointer_seq;            /* dx.c */
+void plat_mouse_park(void);
+static int s_keys;                      /* the keys have the menus: the pointer put away */
+
+/* BrGlNavPoll's, after its reading: the cursor at (*x, *y) */
+void rm_menu_nav(int *x, int *y)
+{
+    static int seq;
+    static const int k[] = { 200, 208, 203, 205, 28, 156 };   /* the arrows, Return */
+    size_t i;
+    if (plat_pointer_seq != seq) {
+        seq = plat_pointer_seq;
+        s_keys = 0;
+    }
+    for (i = 0; i < sizeof k / sizeof k[0]; i++)
+        if (g_BrDikEdge[k[i]])
+            s_keys = 1;
+    if (s_keys) {
+        plat_mouse_park();
+        *x = -rm_menu_ox();             /* the picture's top left corner: no row there */
+        *y = 0;
+    }
+}
+
+/* the cursor's sprite is not drawn while the keys have the menus */
+int rm_menu_pointer_hidden(void) { return s_keys; }

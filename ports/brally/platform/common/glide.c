@@ -159,7 +159,11 @@ static xmap map_box(void)
 void plat_pointer_to_game(int *x, int *y)
 {
     xmap m = map_box();
-    double tx = (double)*x * s_rw / s_w, ty = (double)*y * s_rh / s_h;
+    int uw, uh;
+    double tx, ty;
+    plat_pointer_units(&uw, &uh);         /* (the window's units, not the game's resolution) */
+    tx = (double)*x * s_rw / uw;
+    ty = (double)*y * s_rh / uh;
     *x = (int)floor((tx - m.bx) / m.ax);
     *y = (int)floor((ty - m.by) / m.ay);
 }

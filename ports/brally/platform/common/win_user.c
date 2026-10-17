@@ -58,6 +58,17 @@ static LRESULT send(pwnd *w, UINT m, WPARAM wp, LPARAM lp)
     return (w && w->proc) ? w->proc((HWND)w, m, wp, lp) : 0;
 }
 
+/* the host's mouse positions come in the units of the size its window was
+ * opened at (host.h: the whole window that size), whatever the game's
+ * resolution is now (plat_pointer_to_game) */
+static int s_unit_w = 640, s_unit_h = 480;
+
+void plat_pointer_units(int *w, int *h)
+{
+    *w = s_unit_w;
+    *h = s_unit_h;
+}
+
 HWND WINAPI CreateWindowExA(DWORD ex, LPCSTR cls, LPCSTR title, DWORD style, int x, int y,
                             int cx, int cy, HWND parent, HMENU menu, HINSTANCE inst, LPVOID param)
 {
@@ -76,7 +87,9 @@ HWND WINAPI CreateWindowExA(DWORD ex, LPCSTR cls, LPCSTR title, DWORD style, int
     w->exstyle = ex;
     if (!s_main) {
         s_main = w;
-        host_window_open(cx > 0 ? cx : 640, cy > 0 ? cy : 480, title);
+        s_unit_w = cx > 0 ? cx : 640;
+        s_unit_h = cy > 0 ? cy : 480;
+        host_window_open(s_unit_w, s_unit_h, title);
         host_window_lock_aspect(1);
     }
     memset(&cs, 0, sizeof cs);

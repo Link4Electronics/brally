@@ -6,7 +6,8 @@
  * BrPhaseEnterPlaceholder_1004BDC0); it opens this page, built as the game's
  * own options pages are (Game Options, BrExt_1004E830): the wrench in the top
  * left lobe, the title, a row an option in the middle lobe and Back below,
- * and here, in the top right lobe as Options shows the keyboard, the machine
+ * and here, in the top right lobe as Options shows the keyboard, Boss
+ * Rally's own icon while the Menus row is the one chosen, else the machine
  * whose soundtrack plays: the PC (the app's drawing of one,
  * ports/common/assets/retro_pc.svg) or the N64 (the console Top Gear Rally's
  * options screen turns, drawn from the same point of view), rm_menuicons.c.
@@ -96,13 +97,17 @@ enum { RM_MUSIC_PC, RM_MUSIC_N64 };
 enum { RM_MENUS_TGR, RM_MENUS_BR };
 
 #define SPR_WRENCH  9                   /* the options pages' emblem (op.bmp) */
-#define SPR_MUSIC   RM_SPR_BASE         /* the soundtrack's machine: the PC or the N64 (rm_menuicons.c) */
+#define SPR_MUSIC   RM_SPR_BASE         /* the soundtrack's machine, the PC or the N64 (rm_menuicons.c),
+                                           or with the Menus row chosen Boss Rally's own icon */
 
 /* The page's own pictures, past the game's sprite table (its 145): a
  * control's sprite number from RM_SPR_BASE up draws one of these
  * (BrUiDrawCode_10047930: rm_sprite_draw), colour-keyed as the game's are,
  * centred where the control sits */
 #define RM_SPR_BASE 1000
+
+enum { ROW_WIDE, ROW_MUSIC, ROW_FPS, ROW_MENUS, NROW };
+static RmCtl *s_row[NROW];
 extern "C" const unsigned short rm_menuicon_key;
 extern "C" const int rm_pcicon_w, rm_pcicon_h, rm_n64icon_w, rm_n64icon_h;
 extern "C" const unsigned short rm_pcicon[], rm_n64icon[];
@@ -119,11 +124,81 @@ static BrSurf *icon(int k)
     return s_icon[k];
 }
 
+/* Boss Rally's own icon, the program's (the disc's Boss.ico, the same picture
+ * as BossRally.exe's): read from the data, 32x32 in 16 colours, drawn twice
+ * its size pixel for pixel, its black (and anything its mask leaves out) the
+ * lobe's */
+static BrSurf *s_boss;
+static int s_boss_tried;
+
+static BrSurf *boss_icon(void)
+{
+    unsigned char buf[4096], *d;
+    FILE *f;
+    size_t n;
+    int w, h, bpp, ncol, stride, mstride, x, y;
+    const unsigned char *pal, *bits, *mask;
+    if (s_boss_tried)
+        return s_boss;
+    s_boss_tried = 1;
+    if ((f = fopen("Boss.ico", "rb")) == 0)  /* (the game's own lookup: its folder, then the disc) */
+        return 0;
+    n = fread(buf, 1, sizeof buf, f);
+    fclose(f);
+    if (n < 22 + 40 || buf[2] != 1 || buf[4] == 0)
+        return 0;
+    {
+        unsigned off = buf[18] | buf[19] << 8 | buf[20] << 16 | (unsigned)buf[21] << 24;
+        if (off + 40 > n)
+            return 0;
+        d = buf + off;
+    }
+    w = d[4] | d[5] << 8;
+    h = (d[8] | d[9] << 8) / 2;           /* (the picture and its mask) */
+    bpp = d[14] | d[15] << 8;
+    if (w <= 0 || w > 64 || h <= 0 || h > 64 || (bpp != 4 && bpp != 8))
+        return 0;
+    ncol = d[32] | d[33] << 8;
+    if (ncol == 0)
+        ncol = 1 << bpp;
+    pal = d + 40;
+    bits = pal + 4 * ncol;
+    stride = ((w * bpp + 31) / 32) * 4;
+    mask = bits + stride * h;
+    mstride = ((w + 31) / 32) * 4;
+    if ((size_t)(mask + mstride * h - buf) > n)
+        return 0;
+    if ((s_boss = BrSurfNew(w * 2, h * 2)) == 0)
+        return 0;
+    s_boss->key = rm_menuicon_key;
+    for (y = 0; y < h; y++) {
+        const unsigned char *row = bits + stride * (h - 1 - y), *mrow = mask + mstride * (h - 1 - y);
+        for (x = 0; x < w; x++) {
+            int k = bpp == 4 ? (row[x >> 1] >> (x & 1 ? 0 : 4)) & 15 : row[x];
+            const unsigned char *c = pal + 4 * k;     /* B G R */
+            unsigned short v = (unsigned short)((c[2] >> 3) << 11 | (c[1] >> 2) << 5 | c[0] >> 3);
+            if ((mrow[x >> 3] >> (7 - (x & 7)) & 1) || (c[0] | c[1] | c[2]) == 0)
+                v = rm_menuicon_key;
+            s_boss->pPix[(2 * y) * (w * 2) + 2 * x] = v;
+            s_boss->pPix[(2 * y) * (w * 2) + 2 * x + 1] = v;
+            s_boss->pPix[(2 * y + 1) * (w * 2) + 2 * x] = v;
+            s_boss->pPix[(2 * y + 1) * (w * 2) + 2 * x + 1] = v;
+        }
+    }
+    return s_boss;
+}
+
 extern "C" int rm_sprite_draw(int i, int x, int y)
 {
     int rect[4];
-    BrSurf *s;
-    if (i != SPR_MUSIC || (s = icon(rm_option(RM_OPT_MUSIC) == RM_MUSIC_N64)) == 0)
+    BrSurf *s = 0;
+    if (i != SPR_MUSIC)
+        return 1;
+    /* the Menus row chosen: the game whose menus these are; else the machine
+       whose music plays */
+    if (s_row[ROW_MENUS] && (*(unsigned int *)&((BrUiCtl_ *)(s_row[ROW_MENUS]))->flags1C & 0x20))
+        s = boss_icon();
+    if (s == 0 && (s = icon(rm_option(RM_OPT_MUSIC) == RM_MUSIC_N64)) == 0)
         return 1;
     rect[0] = 0;
     rect[1] = 0;
@@ -135,8 +210,6 @@ extern "C" int rm_sprite_draw(int i, int x, int y)
 
 static void *s_slot;                    /* this page's phase */
 
-enum { ROW_WIDE, ROW_MUSIC, ROW_FPS, ROW_MENUS, NROW };
-static RmCtl *s_row[NROW];
 static char s_text[NROW][40];
 
 static const char *row_text(int r)

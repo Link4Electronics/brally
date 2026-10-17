@@ -467,6 +467,49 @@ static void own_race(int racing)
     }
 }
 
+/* a controller on the game's own menus while they are the app's: its d-pad
+ * and left stick are the arrow keys, A Return, each held as long as it is
+ * (the menus repeat a held arrow themselves); the menus never read a
+ * controller (rm_menuwide.c puts the pointer away for the keys).  B has no
+ * part: the menus have no key for Back, the page's Back row is chosen as any
+ * other */
+static void menu_pad(int on)
+{
+    static const struct { int vk, dik; } k[] = {
+        { 0x26, 0xC8 }, { 0x28, 0xD0 }, { 0x25, 0xCB }, { 0x27, 0xCD }, { 0x0D, 0x1C },
+    };
+    static int was[5], frame;
+    int now[5] = { 0, 0, 0, 0, 0 }, i, has;
+    host_pad p;
+    const char *e = getenv("RM_MENUPAD");
+    has = host_pad_read(&p);
+    frame++;
+    if (e) {        /* (a check: RM_MENUPAD=F:buttons[;...], the pad's buttons from frame F on) */
+        unsigned b = 0;
+        for (; *e; e = strchr(e, ';') ? strchr(e, ';') + 1 : e + strlen(e)) {
+            int f = 0;
+            unsigned v = 0;
+            if (sscanf(e, "%d:%x", &f, &v) == 2 && f <= frame)
+                b = v;
+        }
+        memset(&p, 0, sizeof p);
+        p.buttons = b;
+        has = 1;
+    }
+    if (on && has) {
+        now[0] = (p.buttons >> 12 & 1) || p.y < -0.5f;   /* up */
+        now[1] = (p.buttons >> 14 & 1) || p.y > 0.5f;    /* down */
+        now[2] = (p.buttons >> 15 & 1) || p.x < -0.5f;   /* left */
+        now[3] = (p.buttons >> 13 & 1) || p.x > 0.5f;    /* right */
+        now[4] = p.buttons & 1;                           /* A */
+    }
+    for (i = 0; i < 5; i++)
+        if (now[i] != was[i]) {
+            plat_script_key(k[i].vk, k[i].dik, now[i]);
+            was[i] = now[i];
+        }
+}
+
 /* BrAppFrame's entry */
 void plat_race_frame(void)
 {
@@ -479,6 +522,7 @@ void plat_race_frame(void)
         controls();
     if (s_phase == IDLE && s_menus)
         own_race(racing);
+    menu_pad(s_menus && s_phase == IDLE && state == 4 && g_brPAA29B8 != 0);
     switch (s_phase) {
     case IDLE:
         /* the menus are up (state 4, a phase built) */

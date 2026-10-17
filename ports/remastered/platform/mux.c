@@ -228,9 +228,17 @@ int mux_tgr_host_window_open(int width, int height, const char *title)
     return r;
 }
 
-/* Top Gear Rally opened it first (headless, the null host answers) */
+/* Top Gear Rally opened it first (headless, the null host answers).  Boss
+   Rally reads the mouse in the units of the size it asked for: its events
+   are scaled to them from the window's (route) */
+static int s_br_w = 640, s_br_h = 480;
+
 int mux_br_host_window_open(int width, int height, const char *title)
 {
+    if (width > 0 && height > 0) {
+        s_br_w = width;
+        s_br_h = height;
+    }
     return s_open || host_window_open(width, height, title);
 }
 
@@ -323,6 +331,13 @@ static void route(const host_event *e)
         qpush(MUX_TGR, e);
         break;
     default:
+        if (e->type == HOST_EV_MOUSE && s_front == MUX_BR) {   /* in Boss Rally's units */
+            host_event m = *e;
+            m.x = (int)((long)e->x * s_br_w / s_win_w);
+            m.y = (int)((long)e->y * s_br_h / s_win_h);
+            qpush(MUX_BR, &m);
+            break;
+        }
         qpush(s_front, e);
         break;
     }

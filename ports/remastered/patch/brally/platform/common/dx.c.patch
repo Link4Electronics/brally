@@ -1,0 +1,43 @@
+--- a/platform/common/dx.c
++++ b/platform/common/dx.c
+@@ -227,25 +227,40 @@
+  * game exactly the step from its cursor to the pointer; then it stops, so a
+  * still mouse reads as still (the race reads the mouse as an axis). The
+  * wasm lane does the same (host_dx.c abs_step). */
++/* Top Gear Rally Remastered: the pointer's own movements and presses counted
++ * (rm_menuwide.c: the menus' keys take over from the pointer until it moves) */
++int plat_pointer_seq;
++
+ void plat_mouse_abs(int x, int y)
+ {
+     s_ax = x;
+     s_ay = y;
+     s_alive = 30;
++    plat_pointer_seq++;
+ }
+ 
+ void plat_mouse_move(int dx, int dy)
+ {
+     s_mdx += dx;
+     s_mdy += dy;
++    plat_pointer_seq++;
+ }
+ 
+ void plat_mouse_button(int down)
+ {
+     s_mbtn = down;
+     s_mlatch |= down;
++    if (down)
++        plat_pointer_seq++;
+ }
+ 
++/* the cursor no longer follows the pointer (the keys took over) */
++void plat_mouse_park(void)
++{
++    s_alive = 0;
++    s_mdx = s_mdy = 0;
++}
++
+ static HRESULT did_GetDeviceState(pobj *o, DWORD n, void *out)
+ {
+     plat_pump(0);

@@ -10,7 +10,7 @@
  
  #define TMU_RAM   (4u << 20)
  
-@@ -143,27 +146,160 @@
+@@ -143,22 +146,104 @@
  }
  
  /* ---- the screen map ---------------------------------------------------------------- */
@@ -121,7 +121,11 @@
 -    xmap m = map_box();
 +    /* the menus, where the pointer is used, are drawn boxed (XF_BOX2D) */
 +    xmap m = map_of(XF_BOX2D);
-     double tx = (double)*x * s_rw / s_w, ty = (double)*y * s_rh / s_h;
+     int uw, uh;
+     double tx, ty;
+     plat_pointer_units(&uw, &uh);         /* (the window's units, not the game's resolution) */
+@@ -166,8 +251,59 @@
+     ty = (double)*y * s_rh / uh;
      *x = (int)floor((tx - m.bx) / m.ax);
      *y = (int)floor((ty - m.by) / m.ay);
 +}
@@ -180,7 +184,7 @@
  static void map_ndc(xmap m, float *T)
  {
      T[0] = (float)(2.0 * m.ax / s_rw);
-@@ -172,18 +308,133 @@
+@@ -176,18 +312,133 @@
      T[3] = (float)(1.0 - 2.0 * m.by / s_rh);
  }
  
@@ -318,7 +322,7 @@
      px0 = lround(m.ax * x0 + m.bx); px1 = lround(m.ax * x1 + m.bx);
      py0 = lround(m.ay * y0 + m.by); py1 = lround(m.ay * y1 + m.by);
      if (px0 < 0) px0 = 0;
-@@ -196,11 +447,108 @@
+@@ -200,11 +451,108 @@
      s_st.sx1 = (int32_t)px1; s_st.sy1 = (int32_t)py1;
  }
  
@@ -428,7 +432,7 @@
      brr_clear(c, depth / 65536.0f, 1, s_st.depth_mode != 0, &s_st);
  }
  
-@@ -211,10 +559,17 @@
+@@ -215,10 +563,17 @@
      (void)interval;
      gllog("grBufferSwap");
      plat_text_swap();
@@ -448,7 +452,7 @@
      plat_pump(0);
  }
  
-@@ -489,8 +844,83 @@
+@@ -493,8 +848,83 @@
      o->r = v->r; o->g = v->g; o->b = v->b; o->a = v->a;
      o->s = v->tmuvtx[0].sow * w / su;
      o->t = v->tmuvtx[0].tow * w / sv;
@@ -532,7 +536,7 @@
  /* Glide's triangle setup drops a triangle with no area, and with culling on
   * drops the one facing away: the sign of its area in the coordinates the
   * application passed (before the lower-left origin turns y over).  The
-@@ -512,21 +942,25 @@
+@@ -516,21 +946,25 @@
      gllog_vtx(a);
      gllog_vtx(b);
      gllog_vtx(c);
@@ -561,7 +565,7 @@
      gllog("grDrawPolygonVertexList %d", n);
      for (i = 0; i < n && i < 16; i++)
          gllog_vtx(&vl[i]);
-@@ -536,18 +970,23 @@
+@@ -540,18 +974,23 @@
          if (culled(&vl[0], &vl[i], &vl[i + 1]))
              continue;
          if (k == 3 * 64) {
@@ -587,7 +591,7 @@
  }
  
  FxBool grLfbWriteRegion(GrBuffer_t dst, FxU32 x, FxU32 y, GrLfbSrcFmt_t fmt, FxU32 w, FxU32 h,
-@@ -557,11 +996,14 @@
+@@ -561,11 +1000,14 @@
      gllog("grLfbWriteRegion buf %u x %u y %u fmt %u w %u h %u stride %d", dst, x, y, fmt, w, h, stride);
      if (fmt == 0) {              /* GR_LFB_SRC_FMT_565 */
          int gy = s_lower_left ? s_h - (int)y - (int)h : (int)y, d[4];
