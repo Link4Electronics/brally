@@ -3,14 +3,20 @@
  * Rally Remastered has it.
  *
  * After Units come Widescreen, Music and Show FPS (the options the race's pause
- * menu offers too: ports/remastered/platform/options.c), then the game's own
- * controller, save, load and credits rows.  Each is a row like Units: up or down
- * (a swipe on the iPhone: tgr_touch_value_row) or A takes its other choice, at
- * once, both games told.  Their icons, turning on the ring as the others do:
+ * menu offers too: ports/remastered/platform/options.c) and Menus, then the
+ * game's own controller, save, load and credits rows.  Each is a row like
+ * Units: up or down (a swipe on the iPhone: tgr_touch_value_row) or A takes
+ * its other choice, at once, both games told.  Menus takes Boss Rally's
+ * menus: the game waits while they are in front (src/racing/handoff.c,
+ * tgr_menus_away) and comes back here when the player chooses Top Gear
+ * Rally's on Boss Rally's Remaster Options page.  Their icons, turning on the
+ * ring as the others do:
  *
  *   Widescreen  the PC's monitor, 4:3 when off and drawn 16:9 when on
  *   Music       the PC's monitor for the PC's soundtrack, the console for the N64's
  *   Show FPS    Time Attack's stopwatch (the main menu's, from the cartridge)
+ *   Menus       the console: these are the N64 game's (Boss Rally's, the PC
+ *               game's, are the monitor's on the Music row's terms)
  *
  * The monitor and the console are built by hand
  * (ports/remastered/tools/handicons.py: platform/os/rm_icons.c, the game's own
@@ -35,14 +41,16 @@ extern const unsigned char rm_icon_crt[], rm_icon_n64[];
 extern const unsigned int rm_icon_crt_len, rm_icon_n64_len;
 /* -- end declarations -- */
 
-enum { RM_OPT_WIDESCREEN, RM_OPT_MUSIC, RM_OPT_LIGHTING, RM_OPT_FPS };
+enum { RM_OPT_WIDESCREEN, RM_OPT_MUSIC, RM_OPT_LIGHTING, RM_OPT_FPS, RM_OPT_TEXTURES, RM_OPT_MENUS };
 enum { RM_MUSIC_PC, RM_MUSIC_N64 };
+enum { RM_MENUS_TGR, RM_MENUS_BR };
+void tgr_menus_away(void);              /* src/racing/handoff.c */
 
 #define RM_FIRST 3                      /* our rows: after BGM, SFX and Units */
-#define RM_ROWS 3
+#define RM_ROWS 4
 #define RM_ICONS 0x80600000u            /* the arena's upper half (no Expansion Pak in the game) */
 
-static const int k_opt[RM_ROWS] = { RM_OPT_WIDESCREEN, RM_OPT_MUSIC, RM_OPT_FPS };
+static const int k_opt[RM_ROWS] = { RM_OPT_WIDESCREEN, RM_OPT_MUSIC, RM_OPT_FPS, RM_OPT_MENUS };
 static MenuItem s_row[RM_ROWS];
 static char s_label[RM_ROWS][32];
 static MenuItem *s_items[16];
@@ -129,9 +137,12 @@ void rm_options_frame(void)
   sprintf(s_label[2], "Show FPS: %s", rm_option(RM_OPT_FPS) ? "On" : "Off");
   s_row[0].label = tgr_addr32(s_label[0]);
   s_row[1].label = tgr_addr32(s_label[1]);
+  sprintf(s_label[3], "Menus: Top Gear Rally");
   s_row[2].label = tgr_addr32(s_label[2]);
+  s_row[3].label = tgr_addr32(s_label[3]);
   s_row[0].icon = wide ? s_wide : s_crt;
   s_row[1].icon = pc ? s_crt : s_n64;
+  s_row[3].icon = s_n64;
 }
 
 /* 1 for one of our rows */
@@ -147,7 +158,10 @@ int rm_options_row(int result, int row)
   if (rm_options_ours(row)) {
     if (result == 1 || result == 3 || result == 4) {
       int o = k_opt[row - RM_FIRST];
-      if (o == RM_OPT_MUSIC) {
+      if (o == RM_OPT_MENUS) {
+        rm_option_set(o, RM_MENUS_BR);
+        tgr_menus_away();               /* Boss Rally's menus, until the player is back */
+      } else if (o == RM_OPT_MUSIC) {
         rm_option_set(o, rm_option(o) == RM_MUSIC_PC ? RM_MUSIC_N64 : RM_MUSIC_PC);
       } else {
         rm_option_set(o, !rm_option(o));

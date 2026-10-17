@@ -1,0 +1,24 @@
+--- a/src/core/drawing/br_font.c
++++ b/src/core/drawing/br_font.c
+@@ -987,6 +987,9 @@
+ /* The original's clipped-sprite blitter takes six arguments; the port's
+  * br_uispr.h prototype takes seven, so it is declared unprototyped here. */
+ /* BrUiSprClip: prototype in br_funcs.h */
++
++int rm_menu_backdrop(int x, int y, struct BrSurf *src, const int *rect);   /* Remastered (rm_menuwide.c) */
++int rm_menu_ox(void);
+ 
+ /* WHAT IT DOES: draw one clipped sprite glyph from the font sheet. */
+ /* @implements 0x10058380 glide BrSprFontDraw */
+@@ -995,7 +998,10 @@
+                  int param_5)
+ 
+ {
+-  BrUiSprBlit(DAT_10ac5d84,param_1,param_2,g_img[param_3 & 0xffff].surf,param_4,param_5)
++  /* Remastered: the menus as wide as the window (rm_menuwide.c) */
++  if (rm_menu_backdrop(param_1,param_2,g_img[param_3 & 0xffff].surf,param_4))
++    return;
++  BrUiSprBlit(DAT_10ac5d84,param_1 + rm_menu_ox(),param_2,g_img[param_3 & 0xffff].surf,param_4,param_5)
+   ;
+   return;
+ }

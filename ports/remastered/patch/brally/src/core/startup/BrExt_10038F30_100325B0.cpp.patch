@@ -1,0 +1,23 @@
+--- a/src/core/startup/BrExt_10038F30_100325B0.cpp
++++ b/src/core/startup/BrExt_10038F30_100325B0.cpp
+@@ -66,10 +66,20 @@
+ 
+ /* 64-bit core: declared once, in br_globals.h or its struct's header */
+ 
++extern "C" int  br_menus_own(void);    /* Remastered (race_handoff.c) */
++extern "C" int  rm_quit(void);          /* the app's (ports/remastered/platform/mux.c) */
++extern "C" void host_sleep_ms(unsigned int ms);
++
+ extern "C" void BrExt_10038F30(int a)
+ {
+     Phase *p = (*(Phase * *)&g_brPAA29B8);
+ 
++    /* Remastered: the game's menus are the app's; its quit closes the app as
++       its window's close does (the saves made already), this thread waiting */
++    if (br_menus_own() && rm_quit())
++        for (;;)
++            host_sleep_ms(1000);
++
+     if (p != 0 && (*(int *)&g_AC300) != 0) {
+         (*(int *)&((BrPhase_ *)(p))->f68) = 0;
+         (*(Phase * *)&g_brPAA29B8)->f18(0);

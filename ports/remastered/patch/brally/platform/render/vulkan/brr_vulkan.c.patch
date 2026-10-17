@@ -31,15 +31,15 @@
  
  static VkCommandPool    s_pool;
  static VkCommandBuffer  s_cmd;
-@@ -382,6 +386,8 @@
+@@ -381,6 +385,8 @@
+         tex_destroy(&s_dead[i]);
      s_ndead = 0;
  }
- 
-+#include "brr_vulkan_surf.h"
 +
++#include "brr_vulkan_surf.h"
+ 
  uint32_t brr_texture(uint32_t tid, const uint8_t *rgba, int w, int h)
  {
-     if (tid == 0) {
 @@ -401,6 +407,7 @@
          tex_destroy(&s_tex[tid]);
          return 0;
@@ -112,7 +112,24 @@
      voff = (VkDeviceSize)vo;
      vkCmdBindVertexBuffers(s_cmd, 0, 1, &s_vtx.buf, &voff);
      if (scissor(st->sx0, st->sy0, st->sx1, st->sy1))
-@@ -1009,6 +1035,15 @@
+@@ -790,12 +816,14 @@
+     uint32_t *px;
+     int i, j;
+     VkBufferImageCopy cp;
+-    if (w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > s_w || y + h > s_h)
++    if (w <= 0 || h <= 0)
+         return;
+-    if (d[0] != x || d[1] != y || d[2] != x + w || d[3] != y + h) {
++    if (d[0] != x || d[1] != y || d[2] != x + w || d[3] != y + h) {   /* (any size: the menus' wide picture) */
+         lfb_scaled(d, w, h, p, stride);
+         return;
+     }
++    if (x < 0 || y < 0 || x + w > s_w || y + h > s_h)
++        return;
+     frame_begin();
+     so = ring_take(&s_stage, (VkDeviceSize)w * (VkDeviceSize)h * 4, 16);
+     if (so < 0)
+@@ -1009,6 +1037,15 @@
          want[nw++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
      if (has_ext(ext, ne, "VK_KHR_portability_subset"))
          want[nw++] = "VK_KHR_portability_subset";
@@ -128,7 +145,7 @@
      qi.queueFamilyIndex = s_qfam;
      qi.queueCount = 1;
      qi.pQueuePriorities = &prio;
-@@ -1174,9 +1209,11 @@
+@@ -1174,9 +1211,11 @@
  {
      VkDescriptorSetLayoutBinding b;
      VkDescriptorSetLayoutCreateInfo li = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
@@ -141,7 +158,7 @@
      VkDescriptorPoolCreateInfo pi = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
      VkShaderModuleCreateInfo mi = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
  
-@@ -1204,7 +1241,8 @@
+@@ -1204,7 +1243,8 @@
      lays[1] = s_lay_tex;
      lays[2] = s_lay_smp;
      lays[3] = s_lay_xt;
@@ -151,7 +168,7 @@
      pl.pSetLayouts = lays;
      if (!VK_OK(vkCreatePipelineLayout(s_dev, &pl, NULL, &s_playout)))
          return 0;
-@@ -1212,13 +1250,13 @@
+@@ -1212,13 +1252,13 @@
      ps[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
      ps[0].descriptorCount = 1;
      ps[1].type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
@@ -168,7 +185,7 @@
      pi.poolSizeCount = 4;
      pi.pPoolSizes = ps;
      if (!VK_OK(vkCreateDescriptorPool(s_dev, &pi, NULL, &s_dpool)))
-@@ -1305,7 +1343,9 @@
+@@ -1305,7 +1345,9 @@
          xw.pBufferInfo = &xi;
          vkUpdateDescriptorSets(s_dev, 1, &xw, 0, NULL);
      }

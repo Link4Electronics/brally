@@ -153,3 +153,19 @@
      ring_write(GL_UNIFORM_BUFFER, s_ubo, uo, (long)sizeof u, &u);
      glBindBufferRange(GL_UNIFORM_BUFFER, 0, s_ubo, uo, sizeof u);
      glUseProgram(s_prog);
+@@ -595,11 +637,12 @@
+ void brr_lfb_write(int x, int y, int w, int h, const uint16_t *p, int stride, const int d[4])
+ {
+     uint8_t *px;
+-    if (w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > s_w || y + h > s_h)
+-        return;
++    int own = d[0] == x && d[1] == y && d[2] == x + w && d[3] == y + h && d[3] <= s_rh;
++    if (w <= 0 || h <= 0 || (own && (x < 0 || y < 0 || x + w > s_w || y + h > s_h)))
++        return;                    /* (placed: any size, the menus' wide picture) */
+     if (!(px = lfb_rgba(w, h, p, stride)))
+         return;
+-    if (d[0] == x && d[1] == y && d[2] == x + w && d[3] == y + h && d[3] <= s_rh) {   /* its own pixels: copied straight in */
++    if (own) {   /* its own pixels: copied straight in */
+         glActiveTexture(GL_TEXTURE0);
+         glBindTexture(GL_TEXTURE_2D, s_col);
+         glTexSubImage2D(GL_TEXTURE_2D, 0, x, s_rh - (y + h), w, h, GL_RGBA, GL_UNSIGNED_BYTE, px);

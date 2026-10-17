@@ -1,0 +1,19 @@
+--- a/src/core/menus/BrUiDrawCode_10047930_10040D80.cpp
++++ b/src/core/menus/BrUiDrawCode_10047930_10040D80.cpp
+@@ -38,6 +38,7 @@
+ };
+ 
+ 
++extern "C" int rm_sprite_draw(int i, int x, int y);   /* Remastered (rm_menuopts.cpp) */
+ extern "C" {
+ /* 64-bit core: declared once, in br_globals.h or its struct's header */
+ /* BrDraw10058380: prototype in br_funcs.h */
+@@ -45,6 +46,8 @@
+ 
+ int Draw40D80::Draw()
+ {
++    if ((*(short *)&((BrUiCtl_ *)(this))->w1E20C) >= 1000)   /* Remastered: its own pictures (rm_menuopts.cpp) */
++        return rm_sprite_draw((*(short *)&((BrUiCtl_ *)(this))->w1E20C), (int)(*(float *)&((BrUiCtl_ *)(this))->x), (int)(*(float *)&((BrUiCtl_ *)(this))->y));
+     if ((*(short *)&((BrUiCtl_ *)(this))->w1E20C) >= 0) {
+         BrSprFontDraw((int)(*(float *)&((BrUiCtl_ *)(this))->x), (int)(*(float *)&((BrUiCtl_ *)(this))->y), (*(short *)&g_aBrUiSprite[(*(short *)&((BrUiCtl_ *)(this))->w1E20C)].iImage),
+                        (*(int (*)[4])&g_aBrUiSprite[(*(short *)&((BrUiCtl_ *)(this))->w1E20C)].rect[0]),

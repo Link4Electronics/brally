@@ -63,12 +63,14 @@ void        host_cond_broadcast(host_cond *c);
 void plat_script_autopilot(void);       /* script_game.c */
 void plat_script_autopilot_off(void);
 void plat_script_key(int vk, int dik, int down);   /* script.c */
+void rm_menuopts_refresh(void);         /* src/core/menus/rm_menuopts.cpp */
 
 enum { IDLE, START, RACE, BACK };
 
 static host_mutex *s_m;
 static host_cond *s_c;
 static int s_serving;               /* a caller asked for races: wait for them at the menus */
+static int s_menus;                 /* the menus are the app's (br_menus_run): they run, not wait */
 static int s_pending, s_done;
 static HostRace s_req;
 static HostRaceResult s_res, s_res2;   /* the first player's, the second's */
@@ -108,6 +110,32 @@ int br_race_run(const HostRace *race, HostRaceResult *res)
     host_mutex_unlock(s_m);
     return 1;
 }
+
+/* the caller's side (another thread): the game's menus are the app's until
+ * the player chooses the caller's again (br_menus_leave, from the Remaster
+ * Options page: menu_options.c); then they wait for races again */
+void br_menus_run(void)
+{
+    init();
+    host_mutex_lock(s_m);
+    s_menus = 1;
+    host_cond_broadcast(s_c);
+    while (s_menus)
+        host_cond_wait(s_c, s_m, 0xFFFFFFFFu);
+    host_mutex_unlock(s_m);
+}
+
+/* the game's side: the caller's menus again (its next frame at the menus waits) */
+void br_menus_leave(void)
+{
+    init();
+    host_mutex_lock(s_m);
+    s_menus = 0;
+    host_cond_broadcast(s_c);
+    host_mutex_unlock(s_m);
+}
+
+int br_menus_own(void) { return s_menus; }
 
 /* the caller is there: from now on the game waits at its menus for races */
 void br_race_serve(void)
@@ -262,7 +290,9 @@ static void finish(void)
  * finished (a touch host steers then; elsewhere a touch is a menu's) */
 int br_race_driving(void)
 {
-    return s_phase == RACE && g_pfnStep == (BrGameStepFn)BrRaceStep && DAT_105ccb68[8] == 0 &&
+    /* (a caller's race, or one the game's own menus started while they are the app's) */
+    return (s_phase == RACE || (s_phase == IDLE && s_menus && g_brRaceRules.mode != 4)) &&
+           g_pfnStep == (BrGameStepFn)BrRaceStep && DAT_105ccb68[8] == 0 &&
            g_BrX06909B4 == 0 && g_brRaceLights < 5;
 }
 
@@ -302,14 +332,44 @@ void br_race_click(float nx, float ny)
     s_tap = 1;
 }
 
+/* a touch on the game's own menus while they are the app's: the pointer
+ * there and a click, as a mouse would (the button down the frame after the
+ * pointer moved, up two frames later) */
+void plat_mouse_abs(int x, int y);      /* dx.c */
+void plat_mouse_button(int down);
+static int s_menu_click;                 /* frames into the click */
+
+static void menu_click(void)
+{
+    if (s_menu_click <= 0)
+        return;
+    if (s_menu_click == 3)
+        plat_mouse_button(1);
+    else if (s_menu_click == 1)
+        plat_mouse_button(0);
+    s_menu_click--;
+}
+
 /* the pause menu's rows and the Remaster Options page take it
- * (pause_options.c); anywhere else in a race it is Return, as before */
+ * (pause_options.c); on the game's own menus while they are the app's a
+ * touch clicks where it lands; anywhere else in a race it is Return, as before */
 static void taps(void)
 {
     int press = 0;
+    menu_click();
     if (!s_tap)
         return;
     s_tap = 0;
+    if (s_menus && s_phase == IDLE && DAT_105ccb68[21] == 4 && g_brPAA29B8 != 0) {
+        if (!s_tap_menu) {           /* (a mouse's click is the game's own already) */
+            static const float all[4] = { 0, 0, 640, 480 };
+            float gx, gy;
+            plat_tap_to_game(s_tap_x, s_tap_y, all, &gx, &gy);
+            plat_mouse_abs((int)gx, (int)gy);
+            s_menu_click = 4;
+        }
+        return;
+    }
     if (g_BrX06909B4 == 1) {
         if (rm_pause_tap(s_tap_x, s_tap_y, g_scrW4 / 2, g_brRaceCueBase, &press) && press)
             s_key = BR_KEY_ENTER;
@@ -380,6 +440,33 @@ void br_race_setup2(int *handling, int *automatic, int *tires, int *suspension)
                 *automatic, *tires, *suspension);
 }
 
+/* a race the game's own menus started, while they are the app's: the players
+   drive with the app's controls, as in the caller's races (race_pads.c; its
+   recorded demos play themselves).  The pause menu's "quit game" closes the
+   app, as the game's quit does (BrExt_10038F30); on the iPhone, where an app
+   does not close itself, it ends the race */
+static void own_race(int racing)
+{
+    static int on;
+    int drive = racing && g_brRaceRules.mode != 4;
+    if (drive != on) {
+        br_race_pads_on(drive);
+        on = drive;
+    }
+    if (drive) {
+        static int n;
+        BrDriverCar *c = g_aBrRaceDriver[0].pCar;
+        controls();
+        if (c && ++n % 300 == 0 && getenv("RM_LOG"))   /* (a check: the player's car under the app's controls) */
+            fprintf(stderr, "handoff: own race frame %d lights %d lap %d along %.0f speed %.1f\n", n,
+                    g_brRaceLights, c->lap, c->fFF4, hypotf(c->f1024.x, c->f1024.y));
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+        if (DAT_105ccb68[12] == 2)
+            DAT_105ccb68[12] = 1;
+#endif
+    }
+}
+
 /* BrAppFrame's entry */
 void plat_race_frame(void)
 {
@@ -390,6 +477,8 @@ void plat_race_frame(void)
     keys();
     if (s_phase == RACE)
         controls();
+    if (s_phase == IDLE && s_menus)
+        own_race(racing);
     switch (s_phase) {
     case IDLE:
         /* the menus are up (state 4, a phase built) */
@@ -401,8 +490,13 @@ void plat_race_frame(void)
                 host_mutex_unlock(s_m);
                 return;
             }
-            while (!s_pending)
+            while (!s_pending && !s_menus)
                 host_cond_wait(s_c, s_m, 0xFFFFFFFFu);
+            if (!s_pending) {         /* the app's menus: they run */
+                host_mutex_unlock(s_m);
+                rm_menuopts_refresh();
+                return;
+            }
             host_mutex_unlock(s_m);
         }
         configure(&s_req);

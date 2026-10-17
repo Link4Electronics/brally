@@ -1,6 +1,6 @@
 # Top Gear Rally Remastered
 
-Top Gear Rally's menus with Boss Rally's engine running the races, on macOS,
+Top Gear Rally's menus (or Boss Rally's, the player's choice) with Boss Rally's engine running the races, on macOS,
 Windows, Linux and the iPhone. Nothing here is byte-matched; both games are the
 native ports (`ports/tgrally`, `ports/brally`) built as libraries, with what
 Remastered adds laid over them (`tree.sh`).
@@ -10,9 +10,10 @@ Remastered adds laid over them (`tree.sh`).
 | piece | what |
 |---|---|
 | `tree.sh` | the two ports as Remastered builds them: each port, Remastered's own files over it (`brally/`, `tgrally/`, at the paths they take in the port), its changes to the port's files applied (`patch/brally`, `patch/tgrally`, one unified diff a file, no fuzz). `make ROOT` builds a tree, `save ROOT` turns an edited tree back into files and patches, `check ROOT` says whether it would. A patch that stops applying stops the build: the port moved under it |
-| `brally/`, `patch/brally` | Boss Rally as Remastered has it: the race that fills any window, the races run for Top Gear Rally's menus (`race_handoff.c`, `host_race.h`), split screen and the players' controls (`race_pads.c`), the pause menu's Remaster Options and frame rate (`pause_options.c`), the music hooks (`audio.c`); shelved, built but off: the lighting (`platform/light`, the Metal renderer's lit passes) and the textures (`light_surf.c`, `brr_metal_surf.*`, the sets in `ports/common/surfaces`) |
-| `tgrally/`, `patch/tgrally` | Top Gear Rally as Remastered has it: the race that fills any window (`view.c`, `gfx/rcp.c`), the hand-over (`src/racing/handoff.c`), touch (`os/touch.c`), the frame rate (`drawing/frameloop.c`), the music's mute (`audio/mixer.c`) |
+| `brally/`, `patch/brally` | Boss Rally as Remastered has it: the race that fills any window, the races run for Top Gear Rally's menus (`race_handoff.c`, `host_race.h`), split screen and the players' controls (`race_pads.c`), the pause menu's Remaster Options and frame rate (`pause_options.c`), its own menus as the app's (`race_handoff.c`, `br_menus_run`), their Remaster Options page (`src/core/menus/rm_menuopts.cpp`, `rm_menuicons.c`) and their 16:9 layout (`src/core/drawing/rm_menuwide.c`), the music hooks (`audio.c`); shelved, built but off: the lighting (`platform/light`, the Metal renderer's lit passes) and the textures (`light_surf.c`, `brr_metal_surf.*`, the sets in `ports/common/surfaces`) |
+| `tgrally/`, `patch/tgrally` | Top Gear Rally as Remastered has it: the race that fills any window (`view.c`, `gfx/rcp.c`), the hand-over of the races and of the menus (`src/racing/handoff.c`), touch (`os/touch.c`), the frame rate (`drawing/frameloop.c`), the music's mute (`audio/mixer.c`) |
 | `platform/options.c` | the Remaster Options: kept in the save folder (`remaster.cfg`), applied to both games |
+| `tools/menuicons.py` | Boss Rally's Remaster Options page's two machines, into `brally/src/core/menus/rm_menuicons.c`: the PC from `ports/common/assets/retro_pc.svg`, the N64 the hand-built console drawn in that drawing's oblique, its greys a real console's (`ports/common/assets/n64console.png`) |
 | `platform/controls.c` | the two players' controls: kept in the save folder (`controls.cfg`), read by both games |
 | `tools/handicons.py` | the options screen's monitor and console icons, built by hand in a few hundred triangles of flat colour as the game's own icons are, their sizes, heights and colours measured off renders of a monitor and a console model, into `tgrally/platform/os/rm_icons.c` |
 | `ports/tgrally/link.sh`, `HOST=lib` | Top Gear Rally as `libtgrally.a`, its `main()` as `tgr_main` |
@@ -49,8 +50,37 @@ folder; `RM_OPT_<NAME>=N` sets one for a check):
 | Widescreen | On: a race and the menus fill the window (`TGR_FLAG_ANY_ASPECT`, `BR_FLAG_ANY_ASPECT`); Off: the games' 4:3, boxed | On |
 | Music | PC: Boss Rally's CD; N64: Top Gear Rally's pieces | N64 |
 | Show FPS | the frames a second at the bottom centre, in either game | Off |
+| Menus | Top Gear Rally's or Boss Rally's (below) | Top Gear Rally |
 
-The menus at Widescreen keep their 4:3 layout at its size in the middle of
+**Menus.** Top Gear Rally's options screen has a Menus row after Show FPS
+(the console its icon); taking it puts Boss Rally's own front end in front:
+its main menu, its championship, time attack and quick race, its own races,
+while Top Gear Rally's game thread waits as it does for a race
+(`tgr_menus_away`, `main.c` `menus_engine`, `br_menus_run`), its music
+playing on.  Boss Rally's Options has a Remaster Options row before Back,
+opening a page in its own style: the wrench top left, a row an option saying
+the choice in force (Widescreen, Music, Show FPS, Menus), Back, and top right
+the machine whose music plays (the PC or the N64).  Return or a click takes
+a row's other choice; Menus there hands back to Top Gear Rally's options
+screen.  Kept in `remaster.cfg`: launched with Boss Rally's menus, Top Gear
+Rally goes straight to its main menu (no intro) and hands over on its first
+frame, which is where the player comes back to.  In Boss Rally's menus:
+its races are driven with the app's controls (`race_pads.c`, as the handed
+races are); its Quit, and its pause menu's Quit Game, close the app as the
+window's close does, after its own saves (`rm_quit`; on the iPhone, where an
+app does not close itself, they go back instead); a touch on the iPhone
+clicks where it lands.
+
+At Widescreen Boss Rally's menus fill the window: their picture is as wide
+as the window at the game's height (854 at 16:9, up to twice 640), each
+page's 640 columns centred in it, the pointer free across it.  The backdrop
+every page shares is widened, not boxed: its two vertical bars are carried
+on across the width at their own pitch (157) and alternating as they do,
+only on the black that reaches the picture's edge, so nothing of the logo,
+the panel or a screw changes; at 852x480 the centre 640 columns are the
+4:3 picture's to the pixel but for those bars (`rm_menuwide.c`).
+
+Top Gear Rally's menus at Widescreen keep their 4:3 layout at its size in the middle of
 the window; a picture across the whole screen (a menu's background) is scaled
 up to cover the window, and the title's 3D backdrop, which already reaches past
 the 4:3 edges, simply shows more (`tgrally/platform/gfx/rcp.c`, `place_menu`).

@@ -7,6 +7,7 @@
 #include <string.h>
 #include "host.h"
 #include "tgr_view.h"
+#include "plat.h"
 
 static const struct {
     const char *name;                   /* TGR_FLAG_<name>=0|1 sets it at start */
@@ -160,4 +161,27 @@ int tgr_view_proj_kind(const void *mtx, float *kx, float *ky)
         }
     }
     return 0;
+}
+
+/* a check's shots counted from now: TGR_MENUS_SHOTS=N1,N2,... after Boss Rally's
+   menus hand the app back (src/racing/handoff.c), whose wait the headless
+   retraces run through unpaced; the shots go to --shots, named by retrace, and
+   the run ends after the last */
+void tgr_shots_from_now(const char *offsets)
+{
+    static char list[512];
+    uint32_t now = tgr_frame(), last = now;
+    int n = 0;
+    const char *p = offsets;
+    list[0] = 0;
+    while (p && *p && n < (int)sizeof list - 16) {
+        last = now + (uint32_t)strtoul(p, NULL, 10);
+        n += snprintf(list + n, sizeof list - (size_t)n, "%s%u", n ? "," : "", last);
+        p = strchr(p, ',');
+        if (p)
+            p++;
+    }
+    g_tgr.shot_at = list;
+    g_tgr.frames = (int)last + 2;
+    fprintf(stderr, "tgr: shots at %s\n", list);
 }

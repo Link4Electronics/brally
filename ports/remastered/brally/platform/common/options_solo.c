@@ -54,3 +54,6 @@ void rm_option_set(int which, int value)
     if (getenv("RM_LOG"))
         fprintf(stderr, "remastered: option %d %d\n", which, value);
 }
+
+/* the app's close (mux.c): alone, the game's own quit runs (its menus are never the app's) */
+int rm_quit(void) { return 0; }

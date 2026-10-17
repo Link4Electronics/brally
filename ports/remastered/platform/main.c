@@ -1,5 +1,7 @@
 /* main.c: Top Gear Rally Remastered, the process.  Top Gear Rally runs from
  * launch on this thread (its window loop, os/main.c) and owns the menus;
+ * with Boss Rally's menus chosen (the Remaster Options' Menus) its game
+ * thread waits while Boss Rally's are in front (menus_engine);
  * each race the player starts is handed to Boss Rally's engine
  * (host_race.h), which boots on a thread of its own once the window is open
  * (mux.c: its front end's music is the menus' when the PC's is chosen)
@@ -23,10 +25,12 @@
 /* the Top Gear Rally object (ports/tgrally/link.sh, HOST=lib) */
 int  tgr_main(int argc, char **argv);
 void tgr_race_engine(host_race_fn fn);
+void tgr_menus_engine(void (*fn)(void));
 /* the Boss Rally object (ports/brally/link64.sh, HOST=lib) */
 int  br_main(int argc, char **argv);
 void br_race_serve(void);
 int  br_race_run(const HostRace *race, HostRaceResult *res);
+void br_menus_run(void);
 
 #define BR_STACK (16u << 20)            /* its main thread's, as the iPhone app gives it */
 
@@ -94,9 +98,26 @@ static int race_engine(const HostRace *race, HostRaceResult *res)
     return r;
 }
 
+/* Top Gear Rally's menus engine: called on a thread of its own while its
+ * game thread waits (src/racing/handoff.c), Boss Rally's menus in front
+ * until the player chooses Top Gear Rally's on Boss Rally's Remaster Options
+ * page (race_handoff.c) */
+static void menus_engine(void)
+{
+    if (getenv("RM_LOG"))
+        fprintf(stderr, "remastered: menus: Boss Rally\n");
+    rm_br_start();
+    mux_front(MUX_BR);
+    br_menus_run();
+    mux_front(MUX_TGR);
+    if (getenv("RM_LOG"))
+        fprintf(stderr, "remastered: menus: Top Gear Rally\n");
+}
+
 int main(int argc, char **argv)
 {
     host_set_app_name("Top Gear Rally Remastered", "Top Gear Rally Remastered");
     tgr_race_engine(race_engine);
+    tgr_menus_engine(menus_engine);
     return tgr_main(argc, argv);
 }

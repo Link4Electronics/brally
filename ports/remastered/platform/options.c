@@ -1,6 +1,7 @@
 /* options.c: the Remaster Options (options.h).  Kept as text in the app's save
  * folder, "remaster.cfg", one "name value" a line; a missing file or line is
- * the default (widescreen on, the N64's music, no frame rate shown).  Each game
+ * the default (widescreen on, the N64's music, no frame rate shown, Top Gear
+ * Rally's menus).  Each game
  * reads the frame rate's switch itself (rm_option, from its own drawing).
  *
  * The lighting and the textures are shelved: their code is kept (and built),
@@ -23,6 +24,7 @@ static const struct { const char *name; int def; } k_opt[RM_OPT_COUNT] = {
     [RM_OPT_LIGHTING]   = { "lighting", 0 },          /* shelved */
     [RM_OPT_FPS]        = { "fps", 0 },
     [RM_OPT_TEXTURES]   = { "textures", 0 },          /* shelved */
+    [RM_OPT_MENUS]      = { "menus", RM_MENUS_TGR },
 };
 
 static volatile int s_val[RM_OPT_COUNT];

@@ -133,6 +133,72 @@ static int fake_engine(const HostRace *r, HostRaceResult *res)
 /* the host: the engine that runs the races (NULL: this one does) */
 void tgr_race_engine(host_race_fn fn) { s_engine = fn; }
 
+/* The other game's menus (Top Gear Rally Remastered's Remaster Options:
+ * Menus).  The host's menus engine runs on a host thread while this one waits
+ * on a message queue, as for a race: the game's other threads and its clock
+ * run on, and its music plays under the other game's menus.  It returns when
+ * the player chooses this game's menus again there. */
+static void (*s_menus)(void);
+void tgr_shots_from_now(const char *offsets);   /* platform/os/view.c (checks) */
+static OSMesgQueue s_menus_done;
+static OSMesg s_menus_done_buf[1];
+
+void tgr_menus_engine(void (*fn)(void)) { s_menus = fn; }
+
+static void *menus_thread(void *arg)
+{
+  (void)arg;
+  s_menus();
+  tgr_os_lock();
+  tgr_post_mesg_at(tgr_count(), &s_menus_done, 0);
+  tgr_os_unlock();
+  return 0;
+}
+
+/* on the game thread: the other game's menus, until the player is back */
+void tgr_menus_away(void)
+{
+  if (s_menus == 0) {
+    return;
+  }
+  osCreateMesgQueue(&s_menus_done, s_menus_done_buf, 1);
+  host_thread_start(menus_thread, 0);
+  osRecvMesg(&s_menus_done, 0, OS_MESG_BLOCK);
+  if (getenv("TGR_MENUS_SHOTS")) {     /* (a check: shots counted from the return) */
+    tgr_shots_from_now(getenv("TGR_MENUS_SHOTS"));
+  }
+}
+
+/* At launch with the other game's menus kept (rm_option: Menus), the game goes
+ * straight to its main menu, not the intro (startup/main.c), and leaves for
+ * the other game's on that menu's first frame, its music started
+ * (menus/mainmenu.c): the main menu is where the player comes back to. */
+int rm_option(int which);               /* the app's (ports/remastered/platform/options.h) */
+#define RM_OPT_MENUS 5
+#define RM_MENUS_BR 1
+void BrFadeTo(float level, float secs);
+void BrSfxFadeTo(float level, float secs);
+static int s_menus_boot;
+
+int tgr_menus_at_boot(void)
+{
+  s_menus_boot = s_menus != 0 && rm_option(RM_OPT_MENUS) == RM_MENUS_BR;
+  return s_menus_boot;
+}
+
+void tgr_menus_boot_leave(void)
+{
+  if (!s_menus_boot) {
+    return;
+  }
+  s_menus_boot = 0;
+  BrFadeTo(1.0f, 0.2f);                /* (as the intro fades in, which was skipped) */
+  BrSfxFadeTo(1.0f, 0.2f);
+  D_8028B760 = D_8028B768 = 1.0f;      /* the music at full level at once: the fade is stepped */
+  D_802A49C8 = 255;                    /* by the game loop, which waits (as for a race) */
+  tgr_menus_away();
+}
+
 /* BrRaceTick's first call: 1 when the race was run by the other engine and
  * the game has moved on to what follows it */
 int BrRaceHandoff(void)

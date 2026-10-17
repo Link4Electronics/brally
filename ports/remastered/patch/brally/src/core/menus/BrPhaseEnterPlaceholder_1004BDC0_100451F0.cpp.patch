@@ -1,0 +1,30 @@
+--- a/src/core/menus/BrPhaseEnterPlaceholder_1004BDC0_100451F0.cpp
++++ b/src/core/menus/BrPhaseEnterPlaceholder_1004BDC0_100451F0.cpp
+@@ -96,6 +96,7 @@
+ 
+ 
+ typedef int (*CtlFn)(BrCtl *);
++extern "C" int rm_menuopts_fn(void *);   /* Remastered: its Remaster Options page (rm_menuopts.cpp) */
+ 
+ extern "C" {
+ /* 64-bit core: declared once, in br_globals.h or its struct's header */
+@@ -206,6 +207,19 @@
+     (*(int (**)(BrCtl *))&((BrUiCtl_ *)(p))->pfn08) = (CtlFn)CtlEB40_fn;
+     (*(unsigned short *)&((BrUiCtl_ *)(p))->w1E20C) = 3;
+     p->s34((char *)(BrStrGet(0x22)), 1, 1, (char *)(&(*(char *)&g_hot0)));
++    (*(unsigned short *)&((BrUiPage_ *)(cont))->cCtl) += 1;
++    (*(short *)&((BrUiPage_ *)(cont))->cSel) += 1;
++
++    p = ((BrCtl *)br_new_obj(sizeof(BrUiCtl_), (void *(*)(void *))BrMenuObjCtor_10040B10));
++    (*(BrCtl * (*)[199])&((BrUiPage_ *)(cont))->apCtl[0])[(*(unsigned short *)&((BrUiPage_ *)(cont))->cCtl)] = p;
++    bad = (p == 0);
++    if (bad)
++        FUN_100378c0(4);
++    p->s38(parent, (*(float *)&((BrUiPage_ *)(cont))->fX), (*(float *)&((BrUiPage_ *)(cont))->fY) - DAT_10077654, 0x102001, 2, 5, 1, -1);
++    (*(int (**)(BrCtl *))&((BrUiCtl_ *)(p))->pfn0C) = (CtlFn)BrSub10047360;
++    (*(int (**)(BrCtl *))&((BrUiCtl_ *)(p))->pfn08) = (CtlFn)rm_menuopts_fn;   /* Remastered (rm_menuopts.cpp) */
++    (*(unsigned short *)&((BrUiCtl_ *)(p))->w1E20C) = 3;
++    p->s34((char *)"REMASTER OPTIONS", 1, 1, (char *)(&(*(char *)&g_hot0)));
+     (*(unsigned short *)&((BrUiPage_ *)(cont))->cCtl) += 1;
+     (*(short *)&((BrUiPage_ *)(cont))->cSel) += 1;
+ 

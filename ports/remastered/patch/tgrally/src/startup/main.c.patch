@@ -1,0 +1,20 @@
+--- a/src/startup/main.c
++++ b/src/startup/main.c
+@@ -45,6 +45,8 @@
+ extern void *D_8028A878;
+ extern Mtx D_8028A8C0;              /* the identity, as the RSP reads it */
+ extern float D_8031AB10[4][4];
++int tgr_menus_at_boot(void);            /* port: Top Gear Rally Remastered (src/racing/handoff.c) */
++void BrMainMenu(void);
+ /* -- end declarations -- */
+ 
+ /* WHAT IT DOES: The main game thread: bring up the scheduler, reset the
+@@ -61,7 +63,7 @@
+   BrEntAllReset();
+   BrBootCheck();
+   BrFadeSet(0.0f);
+-  BrModeSet(BrIntroScreen);
++  BrModeSet(tgr_menus_at_boot() ? BrMainMenu : BrIntroScreen);   /* port: the other game's menus kept */
+   D_80270784 = BrRomReadSize(BR_ROM_DEMOS);
+   BrRomUnpack((unsigned char *)D_80307F00, BR_ROM_DEMOS, 0);
+   D_80270784 = 8;

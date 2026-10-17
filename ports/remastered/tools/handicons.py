@@ -141,7 +141,9 @@ def crt():
 
 # ---- the console --------------------------------------------------------------------------------
 CHARCOAL, GREY = 0, 1
-N64_COLOURS = {CHARCOAL: (0.137, 0.137, 0.137), GREY: (0.85, 0.85, 0.85)}
+# a real console's greys (ports/common/assets/n64console.png: its top 71 of 255, its front 60, the
+# sockets about 170), as the options screen's light shows them: 0.137 showed its top at 35
+N64_COLOURS = {CHARCOAL: (0.28, 0.28, 0.285), GREY: (0.72, 0.72, 0.73)}
 
 # its top's height, probed straight down on the source (the median within 0.035 of each point):
 # rows from the front (y -0.653) to the back (0.688), columns x -0.84 to 0.84

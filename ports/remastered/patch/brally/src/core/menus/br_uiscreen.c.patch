@@ -1,0 +1,18 @@
+--- a/src/core/menus/br_uiscreen.c
++++ b/src/core/menus/br_uiscreen.c
+@@ -204,6 +204,7 @@
+ }
+ 
+ /* WHAT IT DOES: menu teardown callback: release a resource and invoke the cleanup funcptr. */
++void rm_menu_frame(void);
+ /* @implements 0x10041DB0 glide BrMenuCallback41DB0 */
+ 
+ int BrMenuCallback41DB0(void)
+@@ -213,6 +214,7 @@
+                     
+                     
+   (*(*(funcptr *)&BrGlFlipHook))();
++  rm_menu_frame();          /* Remastered: the next frame at the window's width (rm_menuwide.c) */
+   return;
+ }
+ 

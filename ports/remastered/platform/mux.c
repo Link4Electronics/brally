@@ -37,6 +37,9 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
 
 #include "host.h"
 #include "mux.h"
@@ -325,6 +328,27 @@ static void route(const host_event *e)
     }
     host_cond_broadcast(s_c);
     host_mutex_unlock(s_m);
+}
+
+/* the app closes as its window's close does (options.h): Boss Rally's Quit,
+   its menus the app's.  0 where an app does not close itself (the iPhone) */
+int rm_quit(void)
+{
+#if TARGET_OS_IPHONE
+    return 0;
+#else
+    host_event e;
+    init_once();
+    memset(&e, 0, sizeof e);
+    e.type = HOST_EV_CLOSE;
+    host_mutex_lock(s_m);
+    qpush(MUX_TGR, &e);
+    host_cond_broadcast(s_c);
+    host_mutex_unlock(s_m);
+    if (!s_open)                        /* headless: no window loop to see it */
+        exit(0);
+    return 1;
+#endif
 }
 
 /* Top Gear Rally's window loop: the one that drains the real queue */
