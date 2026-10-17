@@ -26,6 +26,16 @@ data ships with it ([builder/](builder/README.md)).
 **Maintainer:** Jeffrey Wilbur, Strut B, LLC\
 **Contact:** [retro@strutb.com](mailto:retro@strutb.com)
 
+## The Decompilation Standard
+
+The purpose of a decompilation, as opposed to a recompilation, is
+preservation: recovering the game itself, as written, in a form that outlives
+the original hardware and media. Playability and portability are welcome side
+effects, not the direct goal. With a bit-exact decompilation, every function,
+built with the original compiler, must reproduce the original machine code
+byte for byte. A bit-exact match is 100% reliability that the source is
+accurate to the original, ensuring preservation for future generations.
+
 ## Project Purpose
 
 A bit-exact decompilation of **Boss Rally** (PC, 1999), held to the MAME
