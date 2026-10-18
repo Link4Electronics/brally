@@ -16,7 +16,7 @@ Remastered (right): press ~ to switch between them live.*
 
 This is the 32-bit lane: the first way the game ran on a Mac, and where the
 Remastered lighting, car, skies and music were built. The
-[native port](README.md#native-port-64-bit-cross-platform) replaces it as the game
+[native port](../../../README.md#native-ports) replaces it as the game
 itself; this lane remains the home of those Remastered extras until they move
 over, and the reference the native port was checked against.
 
@@ -125,7 +125,7 @@ not in the verified placement. That is how the Mac-native parts plug in:
 
 `ports/brally-wasm/NATIVE_RENDERER.md` is the design and records what each piece
 measured. This 32-bit lane is interim; the
-[native port](README.md#native-port-64-bit-cross-platform) is its successor.
+[native port](../../../README.md#native-ports) is its successor.
 
 ## Remastered lighting
 

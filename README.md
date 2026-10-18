@@ -5,7 +5,7 @@
 <img src="docs/tgrally/img/native-tgrally.png" width="49%" alt="Top Gear Rally racing out of the Coastline town in the chase view, in the native build on macOS">
 </p>
 
-*Left: Boss Rally's Coastline in the native 64-bit build ([Native port](#native-port-64-bit-cross-platform)),
+*Left: Boss Rally's Coastline in the native 64-bit build ([Native ports](#native-ports)),
 the decompiled PC source compiled for Apple Silicon and drawn through Metal.
 Right: Top Gear Rally's Coastline in the native N64 build ([ports/tgrally](ports/tgrally/PORT.md)),
 the decompiled ROM source compiled for Apple Silicon, with the RCP's display lists drawn through Metal.*
@@ -283,7 +283,7 @@ Further reading: [docs/brally/ARCHITECTURE.md](docs/brally/ARCHITECTURE.md), [do
 - **`sh tools/brally/build_match.sh`**: compiles with the original compiler and diffs; each
   function reports MATCH or DIFF with the first divergence. `tools/brally/pe_patch.py`
   patches matches back into the DLL for drop-in testing.
-- The playable builds are the [native port](#native-port-64-bit-cross-platform)
+- The playable builds are the [Boss Rally native port](#native-ports)
   (macOS, Windows, headless; its scenario suite is `ports/brally/tools/suite.sh`)
   and Top Gear Rally Remastered (`ports/remastered`), which runs it behind Top
   Gear Rally's menus on macOS, Windows and the iPhone.
@@ -376,105 +376,43 @@ reference/tgrally/Top Gear Rally (USA).z64    Top Gear Rally ROM (optional; the 
 it; the N64 decompilation is graded against it, and the Mac app reads its music
 modules for the N64 soundtrack.
 
-## Native port (64-bit, cross-platform)
+## Native ports
 
-`ports/brally/` is the game as a real 64-bit program: native pointers, typed
-structures, no emulated address space and no image of the original DLL mapped
-at its old addresses. One portable core is built once for every OS, with a
-thin platform layer under it, and it plays the whole game: the front end,
-every race mode and weather, saves, the championship, replays, music and
-sound, controllers and network multiplayer.
+The decompiled source isn't just for study. It also builds three games that
+run natively on modern computers, with no emulator:
 
-| OS | window and input | renderer | status |
-|---|---|---|---|
-| macOS (arm64) | Cocoa, GameController | Metal (or Vulkan on MoltenVK) | plays; `Boss Rally 64.app` |
-| Windows (x64) | Win32, XInput | Vulkan, or OpenGL 3.3 without a Vulkan driver | builds (cross-compiled); a `.exe` |
-| any (headless) | scripted input | software reference rasteriser, or none | the test suites |
+| Game | What it is | Runs on |
+|---|---|---|
+| **Boss Rally** | The 1999 PC game, as it shipped. 4:3 picture, the original music and menus. | macOS, Windows |
+| **Top Gear Rally** | The 1997 N64 game, as it shipped. | macOS, Windows |
+| **Top Gear Rally Remastered** | The best of both: Top Gear Rally's menus, with Boss Rally's engine driving the races. Adds widescreen, a choice of PC or N64 music, an FPS counter, and two-player split screen. | macOS, Windows, iPhone and iPad |
 
-**How the core is made.** `ports/brally/src` and `ports/brally/include` are a
-one-time copy of the decomp (the commit in `src/brally/FORKED-FROM`), edited
-directly. Every function is certified to behave as the original does, so the
-copy is retyped for 64 bits rather than regenerated: raw 32-bit offsets and
-strides became named fields, pointers kept in `int` became pointers, every
-original address became one definition with the original's other names for
-it as views of that one object, and N64-format disc data keeps its 4-byte
-address slots through one accessor. The initial data is lifted from your
-`BRGlide.dll` at build time (`tools/brally/datalift.py`); the core never includes the
-MSVC 5.0 SDK headers. `src/brally/` and `src/brally/include/` stay exactly what MSVC 5.0
-compiles, and later byte-matching there never has to flow into the copy;
-`ports/brally/tools/sync.py` lists what the decomp changed since the fork, so
-the few changes that matter to behaviour are carried over by hand.
-`ports/brally/PORTABLE-CORE.md` has the design.
+The first two are faithful ports: they play just like the originals.
+Remastered is where the improvements live.
 
-**Verified against the original.** Under `BR_VCLOCK` the native build and the
-32-bit lane run the same input scripts on one virtual clock, and
-`ports/brally/tools/lockstep.sh` compares the game state every 100 frames
-(dumpdiff.py `--state`: pointers, and what the 32-bit lane draws and plays
-natively, left out). Quick races, every weather, the fog and desert tracks,
-the attract demo and the credits are identical frame for frame; the options,
-cheat, force-feedback, software-shadow, race-finish and season-load scripts
-still differ and are open.
-Network races are checked against brbox, the original DLL run in an
-emulator, frame for frame. Rendering is checked the same way, renderer
-against renderer and against the reference.
+### Building a game with Rally Builder
 
-**The platform layer** (`ports/brally/platform/`) answers what the game asks of
-Windows, by API, not by OS:
+No game data ships with this project, so you need your own copy of the game.
+**Rally Builder** turns that copy into a game you can play.
 
-| Directory | What it is |
-|---|---|
-| `common/` | Win32 (windows, messages, files, threads, timers), DirectInput, DirectSound (mixed natively), MCI and EAR CD audio, DirectPlay over UDP, Glide 2, the C runtime with the game's DOS paths |
-| `render/` | one renderer interface, neutral between graphics APIs: Metal, Vulkan, OpenGL 3.3 (the fallback), a software reference rasteriser (deprecated: checks only), and a null one |
-| `host/` | per OS: the window, keys, mouse, pads, audio out, files (`macos`, `windows`, `win32`, `posix`, `null`) |
-| `src/brally/include/` | the Win32, DirectX and Glide surface the core compiles against, in fixed-width types |
+1. Download Rally Builder for macOS or Windows from
+   [Releases](https://github.com/jeff-strutb/brally/releases/latest) and open it.
+2. Pick a game: Boss Rally, Top Gear Rally or Remastered.
+3. On a Mac with Remastered, pick the Mac or an iPhone.
+4. Point it at your copy of the game:
+   - **Boss Rally:** the retail CD, as a BIN/CUE.
+   - **Top Gear Rally:** the Top Gear Rally (USA) ROM.
+   - **Remastered:** both.
 
-Glide is modelled on the Voodoo: 16-bit W-buffer depth (which the car shadows
-depend on), back-face culling, its combiners, fog and texture formats. Every
-renderer draws at the window's own resolution, one pixel per window pixel,
-as the original drew at the resolution the player chose, and LFB images are
-scaled with sharp bilinear.
+   The builder checks each file's MD5 and builds only from a correct copy.
+5. Pick a folder and press build. You get the app (or an iPhone `.ipa`, or a
+   Windows folder) ready to play. Your original files are no longer needed.
 
-**The game as it shipped.** The port draws the game's 4:3 picture,
-letterboxed or pillarboxed in a window of another shape, the window held at
-that shape, and behaves as the 1999 game did. What improves on it (the race
-filling a window of any shape, the Remastered lighting) is Top Gear Rally
-Remastered's, laid over this port by `ports/remastered/tree.sh`
-([ports/remastered/README.md](ports/remastered/README.md)).
+### Building from source
 
-**Multiplayer** is DirectPlay over UDP: a host advertises on the LAN by
-multicast and relays the session; any copy on the network can join from the
-game's own lobby. `BR_NETPORT` picks the port (47624 by default).
-
-**Building.** `ports/brally/link64.sh` builds the core and links one host and
-one renderer, chosen by environment:
-
-```sh
-# macOS, Metal: build/brally/macos-metal/brally64
-OUT=build/brally/macos-metal HOST=macos RENDER=metal ports/brally/link64.sh
-
-# macOS app: build/brally/macos-metal/Boss Rally 64.app, with the disc's data and CD audio
-# inside (needs reference/brally/ and ffmpeg)
-ports/brally/package_app.sh
-
-# Windows x64, Vulkan, cross-compiled (Homebrew's mingw-w64, vulkan-headers,
-# vulkan-loader, glslang): build/brally/windows-vulkan/brally64.exe
-OUT=build/brally/windows-vulkan HOST=windows RENDER=vulkan CC=ports/brally/tools/wincc.sh ports/brally/link64.sh
-
-# Windows x64, OpenGL 3.3 (a PC without a Vulkan driver): build/brally/windows-gl/brally64.exe
-OUT=build/brally/windows-gl HOST=windows RENDER=gl CC=ports/brally/tools/wincc.sh ports/brally/link64.sh
-
-# headless, the software reference renderer (deprecated: the renderers' checks only):
-# build/brally/null-soft/brally64
-RENDER=soft ports/brally/link64.sh
-```
-
-The build reads the game data from your disc: `BR_CDROOT` is the CD's files
-(default `reference/brally/data/disc`, else beside the program or inside the app),
-`BR_SAVEDIR` the saves and settings (default `~/Library/Application
-Support/Boss Rally 64` on macOS, `%APPDATA%\Boss Rally 64` on Windows). On
-Windows, put the disc's files in `disc\` beside `brally64.exe`.
-
-**Testing.** `ports/brally/tools/suite.sh` runs every `tools/brally/brbox_scripts/`
-scenario headless and reports each script's outcome, network pairs included
-(two copies on one virtual clock); `BR_SHOT` and the scripts' `shot` lines
-save named frames.
+For developers: the commands to build, package and test each port are in
+[ports/README.md](ports/README.md), and the builder itself is in
+[builder/README.md](builder/README.md). Each port's design is in
+[ports/brally/PORTABLE-CORE.md](ports/brally/PORTABLE-CORE.md),
+[ports/tgrally/PORT.md](ports/tgrally/PORT.md) and
+[ports/remastered/README.md](ports/remastered/README.md).
