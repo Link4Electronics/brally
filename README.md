@@ -311,8 +311,8 @@ Further reading: [docs/brally/ARCHITECTURE.md](docs/brally/ARCHITECTURE.md), [do
 ### Building & Setup
 
 - **`./setup.sh`**: stages the matching build entirely inside the repo (nothing
-  installed on the host). Downloads a pinned Wine build, copies MSVC 5.0 out of a
-  VC++ 5.0 disc image, and extracts the game binaries and original function bytes
+  installed on the host). Downloads a pinned Wine build, copies MSVC 5.0 and its
+  C runtime source out of a VC++ 5.0 disc image, and extracts the game binaries and original function bytes
   from the retail disc. Needs (you supply; none tracked in git): `reference/msvc/VCPP-5.00.iso`,
   the Boss Rally disc (`reference/brally/BossRally.BIN` + `.cue`), optionally the
   [Top Gear Rally ROM](#reference-rom-you-supply-not-tracked-in-git), plus Rosetta 2 on Apple Silicon.

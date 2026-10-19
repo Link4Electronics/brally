@@ -14,10 +14,11 @@
 #               whole point of a matching build is that the toolchain does not
 #               drift underneath it.
 #
-#   MSVC 5.0    Copied out of the Visual C++ 5.0 disc image in reference/.
-#               The compiler is proprietary and cannot be downloaded, but the
-#               image is right there, so there is no reason to make a human
-#               copy files by hand.
+#   MSVC 5.0    Copied out of the Visual C++ 5.0 disc image in reference/:
+#               the compiler, its headers and libraries, and the CRT source
+#               the disc ships.  All of it is proprietary and cannot be
+#               downloaded or tracked, but the image is right there, so there
+#               is no reason to make a human copy files by hand.
 #
 #   reference/brally/orig/       Game binaries pulled out of the Boss Rally BIN/CUE.  The match
 #               target is BRD3D.dll; BRGlide.dll is the renderer reference.
@@ -100,7 +101,13 @@ fi
 echo ""
 
 # ---- MSVC 5.0, straight off the disc image -------------------------------
+# The compiler, its headers and libraries, and the CRT source that ships on
+# the same disc.  None of it is ours to redistribute, so none of it is
+# tracked: it comes from your own copy of the disc.  Only
+# tools/brally/crtcorpus.py reads the CRT source; the matching build itself
+# does not.
 MSVC_DIR="tools/toolchains/msvc5"
+CRT_SRC_DIR="$MSVC_DIR/crt/src"
 VC_ISO="reference/msvc/VCPP-5.00.iso"
 
 find_cl() {
@@ -111,15 +118,25 @@ find_cl() {
 }
 
 CL_FOUND=$(find_cl || true)
+need_crt=0
+[ -f "$CRT_SRC_DIR/ABORT.C" ] || need_crt=1
 
-if [ -n "$CL_FOUND" ]; then
-    echo "[ok] MSVC 5.0 compiler found at $CL_FOUND"
+[ -n "$CL_FOUND" ] && echo "[ok] MSVC 5.0 compiler found at $CL_FOUND"
+[ "$need_crt" -eq 0 ] && echo "[ok] MSVC 5.0 CRT source found at $CRT_SRC_DIR/"
+
+if [ -n "$CL_FOUND" ] && [ "$need_crt" -eq 0 ]; then
+    :
 elif [ ! -f "$VC_ISO" ]; then
-    echo "[need] MSVC 5.0, and no disc image at $VC_ISO"
-    echo ""
-    echo "  MSVC 5.0 (Visual Studio 97) is proprietary and cannot be"
-    echo "  downloaded.  Put a Visual C++ 5.0 CD image there and re-run,"
-    echo "  or stage the files by hand into $MSVC_DIR/bin, include, lib."
+    if [ -z "$CL_FOUND" ]; then
+        echo "[need] MSVC 5.0, and no disc image at $VC_ISO"
+        echo ""
+        echo "  MSVC 5.0 (Visual Studio 97) is proprietary and cannot be"
+        echo "  downloaded.  Put a Visual C++ 5.0 CD image there and re-run,"
+        echo "  or stage the files by hand into $MSVC_DIR/bin, include, lib."
+    else
+        echo "[need] the MSVC 5.0 CRT source, and no disc image at $VC_ISO"
+        echo "       (only tools/brally/crtcorpus.py needs it)"
+    fi
 else
     echo "[extract] MSVC 5.0 from $VC_ISO"
 
@@ -139,21 +156,29 @@ else
         exit 1
     fi
 
-    mkdir -p "$MSVC_DIR/bin" "$MSVC_DIR/include" "$MSVC_DIR/lib"
+    if [ -z "$CL_FOUND" ]; then
+        mkdir -p "$MSVC_DIR/bin" "$MSVC_DIR/include" "$MSVC_DIR/lib"
 
-    echo "       bin/ ..."
-    cp -f "$VC"/BIN/* "$MSVC_DIR/bin/" 2>/dev/null || true
-    # cl.exe shells out to the real compiler passes and the PDB writer; the
-    # PDB writer lives with the shared IDE, not with the compiler.
-    for extra in "$MNT/DEVSTUDIO/SHAREDIDE/BIN/MSPDB50.DLL"; do
-        [ -f "$extra" ] && cp -f "$extra" "$MSVC_DIR/bin/"
-    done
+        echo "       bin/ ..."
+        cp -f "$VC"/BIN/* "$MSVC_DIR/bin/" 2>/dev/null || true
+        # cl.exe shells out to the real compiler passes and the PDB writer; the
+        # PDB writer lives with the shared IDE, not with the compiler.
+        for extra in "$MNT/DEVSTUDIO/SHAREDIDE/BIN/MSPDB50.DLL"; do
+            [ -f "$extra" ] && cp -f "$extra" "$MSVC_DIR/bin/"
+        done
 
-    echo "       src/brally/include/ ..."
-    cp -Rf "$VC"/INCLUDE/* "$MSVC_DIR/src/brally/include/" 2>/dev/null || true
+        echo "       include/ ..."
+        cp -Rf "$VC"/INCLUDE/* "$MSVC_DIR/include/" 2>/dev/null || true
 
-    echo "       lib/ ..."
-    cp -Rf "$VC"/LIB/* "$MSVC_DIR/lib/" 2>/dev/null || true
+        echo "       lib/ ..."
+        cp -Rf "$VC"/LIB/* "$MSVC_DIR/lib/" 2>/dev/null || true
+    fi
+
+    if [ "$need_crt" -eq 1 ]; then
+        echo "       crt/src/ ..."
+        mkdir -p "$CRT_SRC_DIR"
+        cp -Rf "$VC"/CRT/SRC/* "$CRT_SRC_DIR/"
+    fi
 
     chmod -R u+rw "$MSVC_DIR" 2>/dev/null || true
 
@@ -164,9 +189,14 @@ else
     if [ -n "$CL_FOUND" ]; then
         echo "[ok] MSVC 5.0 staged: $(ls "$MSVC_DIR/bin" | wc -l | tr -d ' ') bin, \
 $(ls "$MSVC_DIR/include" | wc -l | tr -d ' ') include, \
-$(ls "$MSVC_DIR/lib" | wc -l | tr -d ' ') lib"
+$(ls "$MSVC_DIR/lib" | wc -l | tr -d ' ') lib, \
+$(find "$CRT_SRC_DIR" -type f | wc -l | tr -d ' ') crt/src"
     else
         echo "[fail] extraction finished but no cl.exe landed in $MSVC_DIR/bin"
+        exit 1
+    fi
+    if [ ! -f "$CRT_SRC_DIR/ABORT.C" ]; then
+        echo "[fail] extraction finished but no CRT source landed in $CRT_SRC_DIR"
         exit 1
     fi
 fi

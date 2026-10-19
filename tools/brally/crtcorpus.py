@@ -5,8 +5,8 @@ with our cl.exe and score it against the objects Microsoft shipped.
 WHY.  The game corpus (tools/brally/corpus.py) can only prove constructs the game
 itself already uses; byte/string-handling shapes that appear nowhere in our
 matched code are unprovable from it.  The VC5 CRT is the one body of code
-where we hold BOTH sides: the exact source (tools/toolchains/msvc5/crt/src, vendored
-from VCPP-5.00.iso) and the compiler's own output for it (tools/toolchains/msvc5/lib/
+where we hold BOTH sides: the exact source (tools/toolchains/msvc5/crt/src, staged
+by setup.sh from VCPP-5.00.iso) and the compiler's own output for it (tools/toolchains/msvc5/lib/
 LIBC.LIB).  Every function that recompiles byte-exact is a proof "this C
 produced these bytes" with the same standing as a matched game function.
 

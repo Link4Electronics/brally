@@ -41,15 +41,11 @@ work/
 *.xm
 
 # Toolchains staged by setup.sh. Only our own files in them are tracked: the
-# Wine launcher, the MSVC 5 compatibility headers and the CRT sources.
+# Wine launcher and the MSVC 5 compatibility headers. The compiler and the CRT
+# source come from your own Visual C++ 5.0 disc and are never tracked.
 tools/toolchains/*
 !tools/toolchains/wine.sh
 !tools/toolchains/msvc5-compat/
-!tools/toolchains/msvc5/
-tools/toolchains/msvc5/*
-!tools/toolchains/msvc5/crt/
-tools/toolchains/msvc5/crt/*
-!tools/toolchains/msvc5/crt/src/
 
 # The Remastered assets (sources, concepts, decimated and packed models,
 # textures, audio) are large and stay out of git. Their recipes are tracked:

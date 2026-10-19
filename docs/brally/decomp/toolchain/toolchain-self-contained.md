@@ -17,6 +17,10 @@ staged INSIDE the repo. Never `brew install` Wine, never install to
 - **MSVC 5.0** - mounts `reference/msvc/VCPP-5.00.iso` with `hdiutil` and
   copies `DEVSTUDIO/VC/{BIN,INCLUDE,LIB}` plus `SHAREDIDE/BIN/MSPDB50.DLL`
   into `tools/toolchains/msvc5/`. Compiler ends up at `tools/toolchains/msvc5/bin/cl.exe`.
+  It also copies the CRT source, `DEVSTUDIO/VC/CRT/SRC`, into
+  `tools/toolchains/msvc5/crt/src/` for `tools/brally/crtcorpus.py`. That source is
+  Microsoft's and is never tracked in git; each step runs only if its files are
+  missing, so an existing setup picks up the CRT source on the next run.
 
 `tools/toolchains/wine.sh` is the wrapper everything calls. It picks the repo-local Wine
 (falling back to PATH only if absent) and sets `WINEPREFIX` to

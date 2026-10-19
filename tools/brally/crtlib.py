@@ -3,7 +3,7 @@
 
 The shipped CRT libraries (tools/toolchains/msvc5/lib/LIBC.LIB and friends) are plain
 `!<arch>` archives whose members are ordinary COFF .obj files -- the
-compiler's own output for the CRT source we vendored at tools/toolchains/msvc5/crt/src.
+compiler's own output for the CRT source setup.sh stages at tools/toolchains/msvc5/crt/src.
 lib.exe under wine can extract them too, but it fights back (case mangling,
 one file per invocation, member paths with backslashes); sixty lines of
 parser is cheaper than scripting around it.
