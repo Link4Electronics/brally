@@ -26,6 +26,33 @@ data ships with it ([builder/](builder/README.md)).
 **Maintainer:** Jeffrey Wilbur, Strut B, LLC\
 **Contact:** [retro@strutb.com](mailto:retro@strutb.com)
 
+## License, and no claim to the games
+
+**I claim no ownership whatsoever of the decompiled source code.** Boss Rally
+and Top Gear Rally, their code and their assets belong to their rights
+holders. The C in this repository is a reconstruction of their work, recovered
+by hand so that it compiles back to the original bytes. It is not mine to own,
+license or give away, and nothing here says otherwise. No game data ships in
+this repository: every build starts from your own copy of the game.
+
+This project exists for preservation and for love of these games, so that the
+rally games Boss Game Studios made in the late 1990s can still be read,
+studied, built and played long after the cartridges, discs and hardware they
+shipped on are gone.
+
+The work that is my own (the tools, the native ports' platform code, the
+Remastered renderer and Rally Builder) is dedicated to the public domain under
+[CC0 1.0 Universal](LICENSE). Anyone may use it for any purpose, with no
+permission or credit needed.
+
+**Why CC0.** A preservation project should claim as little as possible. CC0
+asserts nothing over the reconstructed games, and it gives everything that is
+mine to the public domain, with a fallback licence for countries where
+copyright cannot be waived outright. That fallback is why CC0 was chosen over
+the Unlicense, which has the same intent but no fallback. Files written by
+others keep their own terms: `tools/brally/c2read/` is under the MIT licence in
+its `LICENSE.byte-tactics`.
+
 ## The Decompilation Standard
 
 The purpose of a decompilation, as opposed to a recompilation, is
