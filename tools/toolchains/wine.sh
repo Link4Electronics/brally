@@ -22,6 +22,9 @@ fi
 # Vulkan/MoltenVK banner Wine prints over every single cl.exe invocation.
 export WINEPREFIX="${WINEPREFIX:-$ROOT/build/toolchains/wineprefix}"
 export WINEDEBUG="${WINEDEBUG:--all}"
+# Wine creates the prefix itself, but not the folders above it; a fresh clone
+# or a cleared build/ has neither.
+mkdir -p "$(dirname "$WINEPREFIX")"
 
 # R: is the repository, whatever its path on this machine. cl.exe sees every
 # file through it (Wine names a working directory by its most specific drive),
