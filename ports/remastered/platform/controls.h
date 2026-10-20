@@ -48,7 +48,8 @@ const char *rm_bind_label(int kind, int code, char *buf, int n);
 /* a player's car controls this moment as an N64 pad: dik the keys held (DirectInput
  * scan codes, nonzero held), pad the player's own (NULL: none).  Accelerate is A,
  * brake B, reverse A with the stick back, steering the stick (and the d-pad's
- * sides for a key: the race steers keys on a curve), gears R and L, the view C-up */
+ * sides for a key: the race steers keys on a curve), gears R and L, the view
+ * C-up/C-left/C-down in turn, one step each time it is pressed */
 void rm_player_drive(int player, const unsigned char *dik, const struct host_pad *pad,
                      unsigned short *buttons, int *sx, int *sy);
 /* the same player in a menu: the stick's four ways from steering and the gears,

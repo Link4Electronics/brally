@@ -3,13 +3,13 @@
  * "... pad <code>" a line; a missing file or line is the default:
  *
  *   player 1  keys: Boss Rally's own (up accelerates, right Ctrl brakes, down
- *             reverses, the arrows steer, A and Z change gear, Delete the view);
- *             pad: A accelerates, B brakes, X reverses, the d-pad steers, RB and
- *             LB change gear, Y the view (the iPhone's touch controls send A, B
- *             and X: accelerator, brake, reverse)
+ *             reverses, the arrows steer, A and Z change gear, Delete cycles the
+ *             view); pad: A accelerates, B brakes, X reverses, the d-pad steers,
+ *             RB and LB change gear, View cycles the view (the iPhone's touch
+ *             controls send A, B and X: accelerator, brake, reverse)
  *   player 2  keys: I accelerates, O brakes, K reverses, J and L steer, U and M
- *             change gear, Y the view (none of them a key either game's own
- *             keys or debug keys use for driving); pad: as player 1's */
+ *             change gear, Y cycles the view (none of them a key either game's
+ *             own keys or debug keys use for driving); pad: as player 1's */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,7 +27,7 @@ static const unsigned char k_key_def[2][RM_ACT_COUNT] = {
     { 0xC8, 0x9D, 0xD0, 0xCB, 0xCD, 0x1E, 0x2C, 0xD3 },
     { 0x17, 0x18, 0x25, 0x24, 0x26, 0x16, 0x32, 0x15 },
 };
-static const signed char k_pad_def[RM_ACT_COUNT] = { 0, 1, 2, 15, 13, 5, 4, 3 };
+static const signed char k_pad_def[RM_ACT_COUNT] = { 0, 1, 2, 15, 13, 5, 4, 6 };
 
 static int s_key[2][RM_ACT_COUNT], s_pad[2][RM_ACT_COUNT];
 static int s_loaded;
@@ -185,19 +185,24 @@ static int stick(float v)                    /* -1..1 to the pad's -80..80, past
     return (int)(v * 80.0f);
 }
 
+static int s_view_was[2], s_view_cam[2];
+
 void rm_player_drive(int player, const unsigned char *dik, const host_pad *pad, unsigned short *buttons,
                      int *sx, int *sy)
 {
     unsigned short b = 0;
-    int x = pad ? stick(pad->x) : 0, y = 0;
+    int x = pad ? stick(pad->x) : 0, y = 0, view;
     if (held(player, RM_ACT_ACCEL, dik, pad))
         b |= RM_N64_A | RM_N64_DU;
     if (held(player, RM_ACT_REVERSE, dik, pad)) {
         b |= RM_N64_A | RM_N64_DD;
         y = -80;
     }
-    if (held(player, RM_ACT_BRAKE, dik, pad))
+    if (held(player, RM_ACT_BRAKE, dik, pad)) {
+        b &= (unsigned short)~(RM_N64_A | RM_N64_DU | RM_N64_DD);
         b |= RM_N64_B;
+        y = 0;
+    }
     if (held(player, RM_ACT_LEFT, dik, pad)) {
         b |= RM_N64_DL;
         x = -80;
@@ -210,8 +215,14 @@ void rm_player_drive(int player, const unsigned char *dik, const host_pad *pad, 
         b |= RM_N64_R;
     if (held(player, RM_ACT_GEAR_DOWN, dik, pad))
         b |= RM_N64_L;
-    if (held(player, RM_ACT_VIEW, dik, pad))
-        b |= RM_N64_CU;
+    view = held(player, RM_ACT_VIEW, dik, pad);
+    if (player >= 0 && player < 2) {
+        if (view && !s_view_was[player]) {
+            s_view_cam[player] = (s_view_cam[player] + 1) % 3;
+            b |= s_view_cam[player] == 0 ? RM_N64_CU : s_view_cam[player] == 1 ? RM_N64_CL : RM_N64_CD;
+        }
+        s_view_was[player] = view;
+    }
     *buttons = b;
     *sx = x;
     *sy = y;

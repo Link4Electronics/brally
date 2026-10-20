@@ -24,6 +24,7 @@ Remastered adds laid over them (`tree.sh`).
 | `link.sh` | makes the tree (`OUT/tree`), builds both libraries in it, makes each one object (its thunks inside, only its entry points global: the two games share some hundred function names), links the executable |
 | `package_app.sh` | `Top Gear Rally Remastered.app` (macOS) |
 | `package_linux.sh` | `Top Gear Rally Remastered/` (Linux: the executable, the data track, the CD audio, a `.desktop`) |
+| `make-appimage.sh` | the AppImage from `package_linux.sh` (anylinux, run in the Arch container) |
 | `music.sh` | Boss Rally's CD audio as FLAC, the PC's music, into the app (`package_app.sh`, `package_linux.sh`, `ios/build.sh`, `android/build.sh`) |
 | `tools/` | the lighting's tests (`lighttest/`, run against `build/remastered/tree`; `surfparity.sh` the textures' surface maps against `texregion.py`), `lightcheck.sh`, `texmat_h.py`; `mixcheck.sh`, the music's routing in `mux.c` checked against computed values |
 | `ios/` | the iPhone app: `build.sh`, the xcodegen project, and in `Sources` the Swift host under the multiplexer (the Metal layer, events, Core Audio, the save folder) and the touch controls |
@@ -120,9 +121,10 @@ it), and Reset (`tgrally/src/menus/rmcontrols.c`, `platform/controls.c`). The
 first player drives with the keyboard and the first pad (on the iPhone, the
 touch controls), the second with the keyboard and the second pad; the left
 stick always steers. Defaults: player 1 Boss Rally's keys (arrows, right Ctrl
-brakes, A and Z gears, Delete the view), player 2 I accelerates, K reverses,
-J and L steer, O brakes, U and M gears, Y the view; on a pad A accelerates,
-B brakes, X reverses, RB and LB change gear, Y the view.
+brakes, A and Z gears, Delete cycles the view), player 2 I accelerates, K
+reverses, J and L steer, O brakes, U and M gears, Y cycles the view; on a pad
+A accelerates, B brakes, X reverses, RB and LB change gear, View cycles the
+view.
 
 The window opens at 16:9 with Widescreen on and takes any shape the player
 gives it; the games' wishes to lock its shape are not passed on. Nothing
@@ -166,6 +168,7 @@ CC=ports/brally/tools/wincc.sh HOST=windows RENDER=vulkan ports/remastered/link.
 HOST=null ports/remastered/link.sh                        # headless
 HOST=linux RENDER=vulkan ports/remastered/link.sh         # build/remastered/linux-vulkan/remastered
 ports/remastered/package_linux.sh                         # ... /Top Gear Rally Remastered/
+ports/remastered/make-appimage.sh                         # dist/remastered-<arch>.AppImage
 ports/remastered/ios/build.sh [--sim] [--install [--device ID]]
                                                           # build/remastered/ios-metal (ios-sim-metal)
 ports/remastered/android/build.sh                         # build/remastered/android-vulkan: the APK
