@@ -24,10 +24,13 @@
  * refers to it is destroyed once that frame has finished.
  *
  * The window surface is the one OS-specific part: a CAMetalLayer on macOS,
- * an HWND on Windows. Without one (headless) frames are drawn and shots work,
- * nothing is shown. */
+ * an HWND on Windows, a wl_surface on Linux (Wayland), the app's window on
+ * Android. Without one (headless) frames are drawn and shots work, nothing
+ * is shown. */
 #if defined(__APPLE__)
 #define VK_USE_PLATFORM_METAL_EXT
+#elif defined(__ANDROID__)
+#define VK_USE_PLATFORM_ANDROID_KHR
 #endif
 #include <vulkan/vulkan.h>
 #include <math.h>
@@ -58,6 +61,24 @@ typedef VkResult (VKAPI_PTR *br_create_win32_surface)(VkInstance, const br_win32
                                                      const VkAllocationCallbacks *, VkSurfaceKHR *);
 #define BR_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR ((VkStructureType)1000009000)
 #define BR_KHR_WIN32_SURFACE_EXTENSION_NAME "VK_KHR_win32_surface"
+#elif defined(__linux__)
+/* the Linux host's Wayland display and surface (host/linux), as plain
+ * pointers: this file never includes wayland-client.h, so the surface call is
+ * looked up and its create-info spelled here, field for field
+ * VkWaylandSurfaceCreateInfoKHR */
+void *host_wayland_display(void);
+void *host_wayland_surface(void);
+typedef struct br_wayland_surface_info {
+    VkStructureType sType;
+    const void     *pNext;
+    VkFlags         flags;
+    void           *display;
+    void           *surface;
+} br_wayland_surface_info;
+typedef VkResult (VKAPI_PTR *br_create_wayland_surface)(VkInstance, const br_wayland_surface_info *,
+                                                        const VkAllocationCallbacks *, VkSurfaceKHR *);
+#define BR_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR ((VkStructureType)1000006000)
+#define BR_KHR_WAYLAND_SURFACE_EXTENSION_NAME "VK_KHR_wayland_surface"
 #endif
 
 /* the shader's uniform block, std140: see shaders/glide_u.glsl */
@@ -133,6 +154,7 @@ static int              s_ndead, s_capdead;
 static ring             s_ubo, s_vtx, s_stage;
 
 static VkSurfaceKHR     s_surface;
+static host_mutex      *s_lock;                   /* serialises present with another renderer's release */
 static VkSwapchainKHR   s_swap;
 static VkImage         *s_swap_img;
 static uint32_t         s_nswap, s_swap_w, s_swap_h;
@@ -847,12 +869,27 @@ static void swap_destroy(void)
     s_nswap = 0;
 }
 
+/* the window passed to the other engine (Remastered runs two): let go of the
+ * swapchain so the other's can be made; Wayland allows one fifo object per
+ * wl_surface, and Mesa makes one for every swapchain */
+static void window_release(void *user)
+{
+    (void)user;
+    if (!s_lock)
+        return;
+    host_mutex_lock(s_lock);
+    if (s_swap)
+        swap_destroy();
+    host_mutex_unlock(s_lock);
+}
+
 static int swap_make(void)
 {
     VkSurfaceCapabilitiesKHR caps;
     VkSwapchainCreateInfoKHR ci = { VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR };
     VkSurfaceFormatKHR fmts[32];
-    uint32_t nf = 32, i;
+    VkPresentModeKHR modes[8];
+    uint32_t nf = 32, nm = 8, i;
     VkBool32 ok = VK_FALSE;
     if (!s_surface)
         return 0;
@@ -878,15 +915,27 @@ static int swap_make(void)
         ci.minImageCount = caps.maxImageCount;
     ci.imageExtent = caps.currentExtent;
     if (ci.imageExtent.width == UINT32_MAX) {
-        ci.imageExtent.width = (uint32_t)s_w * 2;
-        ci.imageExtent.height = (uint32_t)s_h * 2;
+        /* Wayland: the window's own pixels; nothing else tells us its size */
+        int ww = 0, wh = 0;
+        host_window_pixels(&ww, &wh);
+        ci.imageExtent.width = ww > 0 ? (uint32_t)ww : (uint32_t)s_w * 2;
+        ci.imageExtent.height = wh > 0 ? (uint32_t)wh : (uint32_t)s_h * 2;
     }
     ci.imageArrayLayers = 1;
     ci.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     ci.preTransform = caps.currentTransform;
     ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    ci.presentMode = VK_PRESENT_MODE_FIFO_KHR;      /* presents keep to the refresh, as the board's swap did */
+    /* the game keeps its own time (os/thread.c paces the retraces): a
+     * present must not wait for the display when it need not.  On Wayland
+     * this also keeps Mesa off the fifo_v1 protocol, which allows one fifo
+     * object per surface (two renderers present into the window) and stalls
+     * the client when the window is hidden or occluded */
+    ci.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(s_phys, s_surface, &nm, modes);
+    for (i = 0; i < nm; i++)
+        if (modes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
+            ci.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
     ci.clipped = VK_TRUE;
     if (!VK_OK(vkCreateSwapchainKHR(s_dev, &ci, NULL, &s_swap)))
         return 0;
@@ -920,6 +969,19 @@ static int surface_make(void)
     si.hinstance = host_win32_instance();
     si.hwnd = host_window_handle();
     return fn && si.hwnd && fn(s_inst, &si, NULL, &s_surface) == VK_SUCCESS;
+#elif defined(__ANDROID__)
+    VkAndroidSurfaceCreateInfoKHR si = { VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR };
+    si.window = (ANativeWindow *)host_window_handle();   /* the app's window */
+    return si.window && vkCreateAndroidSurfaceKHR(s_inst, &si, NULL, &s_surface) == VK_SUCCESS;
+#elif defined(__linux__)
+    br_wayland_surface_info si;
+    br_create_wayland_surface fn =
+        (br_create_wayland_surface)vkGetInstanceProcAddr(s_inst, "vkCreateWaylandSurfaceKHR");
+    memset(&si, 0, sizeof si);
+    si.sType = BR_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
+    si.display = host_wayland_display();
+    si.surface = host_wayland_surface();
+    return fn && si.display && si.surface && fn(s_inst, &si, NULL, &s_surface) == VK_SUCCESS;
 #else
     return 0;
 #endif
@@ -953,6 +1015,16 @@ static int make_instance(void)
     if (has_ext(ext, n, VK_KHR_SURFACE_EXTENSION_NAME) && has_ext(ext, n, BR_KHR_WIN32_SURFACE_EXTENSION_NAME)) {
         want[nw++] = VK_KHR_SURFACE_EXTENSION_NAME;
         want[nw++] = BR_KHR_WIN32_SURFACE_EXTENSION_NAME;
+    }
+#elif defined(__ANDROID__)
+    if (has_ext(ext, n, VK_KHR_SURFACE_EXTENSION_NAME) && has_ext(ext, n, VK_KHR_ANDROID_SURFACE_EXTENSION_NAME)) {
+        want[nw++] = VK_KHR_SURFACE_EXTENSION_NAME;
+        want[nw++] = VK_KHR_ANDROID_SURFACE_EXTENSION_NAME;
+    }
+#elif defined(__linux__)
+    if (has_ext(ext, n, VK_KHR_SURFACE_EXTENSION_NAME) && has_ext(ext, n, BR_KHR_WAYLAND_SURFACE_EXTENSION_NAME)) {
+        want[nw++] = VK_KHR_SURFACE_EXTENSION_NAME;
+        want[nw++] = BR_KHR_WAYLAND_SURFACE_EXTENSION_NAME;
     }
 #endif
     /* a layered implementation (MoltenVK) is listed only when asked for */
@@ -1317,9 +1389,33 @@ int brr_open(int width, int height)
     void *m = NULL;
     const char *e;
 
+    if (s_dev) {                        /* opened again (a resolution set at the race's
+                                         * start): the renderer stays, only its window's
+                                         * swapchain is let go and made again.  A second
+                                         * instance would make a second fifo surface for
+                                         * the one wl_surface, which Wayland refuses */
+        if (width == s_w && height == s_h) {
+            if (s_surface)
+                host_window_release_register(window_release, NULL);
+            host_mutex_lock(s_lock);
+            swap_destroy();
+            if (s_surface && !s_offscreen && host_window_visible())
+                swap_make();
+            host_mutex_unlock(s_lock);
+            return 1;
+        }
+        host_mutex_lock(s_lock);
+        swap_destroy();
+        host_mutex_unlock(s_lock);
+        if (s_surface) {
+            vkDestroySurfaceKHR(s_inst, s_surface, NULL);
+            s_surface = VK_NULL_HANDLE;
+        }
+    }
     s_w = s_rw = width;
     s_h = s_rh = height;
     s_offscreen = getenv("BR_VCLOCK") != NULL;
+    s_lock = host_mutex_new();
     if (!make_instance())
         return 0;
     if (!s_offscreen && !surface_make())
@@ -1344,8 +1440,13 @@ int brr_open(int width, int height)
         !make_sets())
         return 0;
     (void)m;
-    if (s_surface)
-        swap_make();
+    if (s_surface) {
+        host_window_release_register(window_release, NULL);
+        host_mutex_lock(s_lock);
+        if (host_window_visible())                  /* the other engine may be in front */
+            swap_make();
+        host_mutex_unlock(s_lock);
+    }
     e = getenv("BR_SHOT");
     if (e && sscanf(e, "%ld:%1023s", &s_shot_frame, s_shot_path) != 2)
         s_shot_frame = -1;
@@ -1354,8 +1455,14 @@ int brr_open(int width, int height)
 
 void brr_close(void)
 {
+    host_window_release_unregister(window_release, NULL);
     if (s_dev)
         vkDeviceWaitIdle(s_dev);
+    if (s_lock) {                       /* (the window may be another engine's now) */
+        host_mutex_lock(s_lock);
+        swap_destroy();
+        host_mutex_unlock(s_lock);
+    }
 }
 
 /* the sharp bilinear pass: its pipeline and the frame as its texture, once */
@@ -1619,17 +1726,17 @@ void brr_present(void)
     int show = 0, want_shot = (long)(s_frame + 1) == s_shot_frame || s_want_read;
     VkBufferImageCopy cp;
 
+    if (s_lock)
+        host_mutex_lock(s_lock);
     frame_begin();                                  /* a frame with nothing drawn still presents */
     pass_end();
     if (s_surface && !s_offscreen && host_window_visible()) {
-#ifdef __APPLE__
         {                                           /* the swapchain follows the window's pixels */
-            int fw, fh;
+            int fw = 0, fh = 0;
             host_window_pixels(&fw, &fh);
             if (s_swap && fw > 0 && ((uint32_t)fw != s_swap_w || (uint32_t)fh != s_swap_h))
                 swap_destroy();
         }
-#endif
         if (!s_swap)
             swap_make();
         if (s_swap) {
@@ -1640,6 +1747,8 @@ void brr_present(void)
                 show = 1;
             }
         }
+    } else if (s_swap) {
+        swap_destroy();                             /* hidden: the other engine has the window */
     }
     barrier(s_cmd, s_col, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
@@ -1701,6 +1810,8 @@ void brr_present(void)
         if (w != s_rw || h != s_rh)
             targets_resize(w, h);
     }
+    if (s_lock)
+        host_mutex_unlock(s_lock);
 }
 
 int brr_shot(const char *path)

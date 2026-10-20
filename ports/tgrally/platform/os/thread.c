@@ -353,7 +353,7 @@ static void spawn(TThread *t)
  * left at the count's rate, 3/4 of the CPU's (initialize.c) */
 void osInitialize(void)
 {
-    extern uint64_t osClockRate;
+    extern unsigned long long osClockRate;
     osClockRate = osClockRate * 3 / 4;
 }
 

@@ -18,10 +18,13 @@
  * destroyed once that frame has finished.
  *
  * The window surface is the one OS-specific part: an HWND on Windows, the
- * host's CAMetalLayer on macOS. Without a window (headless) frames are drawn
- * and read back for screenshots, nothing is shown. */
+ * host's CAMetalLayer on macOS, a wl_surface on Linux (Wayland), the app's
+ * window on Android. Without a window (headless) frames are drawn and read
+ * back for screenshots, nothing is shown. */
 #if defined(__APPLE__)
 #define VK_USE_PLATFORM_METAL_EXT
+#elif defined(__ANDROID__)
+#define VK_USE_PLATFORM_ANDROID_KHR
 #endif
 #include <vulkan/vulkan.h>
 #include <stddef.h>
@@ -48,6 +51,24 @@ typedef VkResult (VKAPI_PTR *tgr_create_win32_surface)(VkInstance, const tgr_win
                                                       const VkAllocationCallbacks *, VkSurfaceKHR *);
 #define TGR_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR ((VkStructureType)1000009000)
 #define TGR_KHR_WIN32_SURFACE_EXTENSION_NAME "VK_KHR_win32_surface"
+#elif defined(__linux__)
+/* the Linux host's Wayland display and surface (host/linux), as plain
+ * pointers: this file never includes wayland-client.h, so the surface call is
+ * looked up and its create-info spelled here, field for field
+ * VkWaylandSurfaceCreateInfoKHR */
+void *host_wayland_display(void);
+void *host_wayland_surface(void);
+typedef struct tgr_wayland_surface_info {
+    VkStructureType sType;
+    const void     *pNext;
+    VkFlags         flags;
+    void           *display;
+    void           *surface;
+} tgr_wayland_surface_info;
+typedef VkResult (VKAPI_PTR *tgr_create_wayland_surface)(VkInstance, const tgr_wayland_surface_info *,
+                                                         const VkAllocationCallbacks *, VkSurfaceKHR *);
+#define TGR_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR ((VkStructureType)1000006000)
+#define TGR_KHR_WAYLAND_SURFACE_EXTENSION_NAME "VK_KHR_wayland_surface"
 #endif
 
 /* ---- the draw's state: shaders/rcp_u.glsl, std140 -------------------------------------- */
@@ -118,6 +139,7 @@ static ring             s_ubo, s_vtx;
 
 static void            *s_window;                     /* the host's window (rdr_window) */
 static VkSurfaceKHR     s_surface;
+static host_mutex      *s_lock;                   /* serialises present with another renderer's release */
 static VkSwapchainKHR   s_swap;
 static VkImage         *s_swap_img;
 static VkImageView     *s_swap_view;
@@ -696,6 +718,16 @@ static int make_instance(void)
         want[nw++] = VK_KHR_SURFACE_EXTENSION_NAME;
         want[nw++] = TGR_KHR_WIN32_SURFACE_EXTENSION_NAME;
     }
+#elif defined(__ANDROID__)
+    if (has_ext(ext, n, VK_KHR_SURFACE_EXTENSION_NAME) && has_ext(ext, n, VK_KHR_ANDROID_SURFACE_EXTENSION_NAME)) {
+        want[nw++] = VK_KHR_SURFACE_EXTENSION_NAME;
+        want[nw++] = VK_KHR_ANDROID_SURFACE_EXTENSION_NAME;
+    }
+#elif defined(__linux__)
+    if (has_ext(ext, n, VK_KHR_SURFACE_EXTENSION_NAME) && has_ext(ext, n, TGR_KHR_WAYLAND_SURFACE_EXTENSION_NAME)) {
+        want[nw++] = VK_KHR_SURFACE_EXTENSION_NAME;
+        want[nw++] = TGR_KHR_WAYLAND_SURFACE_EXTENSION_NAME;
+    }
 #endif
     if (has_ext(ext, n, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)) {   /* MoltenVK is listed only if asked */
         want[nw++] = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
@@ -731,6 +763,23 @@ static int make_surface(void)
         si.hinstance = host_win32_instance();
         si.hwnd = s_window;
         return fn && fn(s_inst, &si, NULL, &s_surface) == VK_SUCCESS;
+    }
+#elif defined(__ANDROID__)
+    {
+        VkAndroidSurfaceCreateInfoKHR si = { VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR };
+        si.window = (ANativeWindow *)s_window;              /* the app's window */
+        return si.window && vkCreateAndroidSurfaceKHR(s_inst, &si, NULL, &s_surface) == VK_SUCCESS;
+    }
+#elif defined(__linux__)
+    {
+        tgr_wayland_surface_info si;
+        tgr_create_wayland_surface fn =
+            (tgr_create_wayland_surface)vkGetInstanceProcAddr(s_inst, "vkCreateWaylandSurfaceKHR");
+        memset(&si, 0, sizeof si);
+        si.sType = TGR_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
+        si.display = host_wayland_display();
+        si.surface = host_wayland_surface();
+        return fn && si.display && si.surface && fn(s_inst, &si, NULL, &s_surface) == VK_SUCCESS;
     }
 #else
     return 0;
@@ -912,6 +961,8 @@ static int make_layouts(void)
     return 1;
 }
 
+static void window_release(void *user);
+
 int rdr_init(void)
 {
     VkCommandPoolCreateInfo pi = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
@@ -919,6 +970,7 @@ int rdr_init(void)
     VkFenceCreateInfo fi = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
     VkSemaphoreCreateInfo si = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
     static const uint8_t none[4] = { 0, 0, 0, 0 };
+    s_lock = host_mutex_new();
     if (!make_instance())
         return 0;
     if (!make_surface())
@@ -941,7 +993,11 @@ int rdr_init(void)
     s_captex = 256;
     s_tex = (vtex *)calloc((size_t)s_captex, sizeof *s_tex);
     s_ntex = 1;
-    return tex_make(&s_tex[0], none, 1, 1);           /* handle 0: no texture, reads zero */
+    if (!tex_make(&s_tex[0], none, 1, 1))            /* handle 0: no texture, reads zero */
+        return 0;
+    if (s_surface)
+        host_window_release_register(window_release, NULL);
+    return 1;
 }
 
 /* ---- the window ---------------------------------------------------------------------------- */
@@ -969,6 +1025,20 @@ static void swap_destroy(void)
     s_nswap = 0;
 }
 
+/* the window passed to the other engine (Remastered runs two): let go of the
+ * swapchain so the other's can be made; Wayland allows one fifo object per
+ * wl_surface, and Mesa makes one for every swapchain */
+static void window_release(void *user)
+{
+    (void)user;
+    if (!s_lock)
+        return;
+    host_mutex_lock(s_lock);
+    if (s_swap)
+        swap_destroy();
+    host_mutex_unlock(s_lock);
+}
+
 /* the window's size in pixels (0 x 0 when minimised or there is none) */
 static void window_size(uint32_t *w, uint32_t *h)
 {
@@ -976,8 +1046,15 @@ static void window_size(uint32_t *w, uint32_t *h)
     *w = *h = 0;
     if (!s_surface || vkGetPhysicalDeviceSurfaceCapabilitiesKHR(s_phys, s_surface, &caps) != VK_SUCCESS)
         return;
-    *w = caps.currentExtent.width == UINT32_MAX ? (uint32_t)s_fb_w * 2 : caps.currentExtent.width;
-    *h = caps.currentExtent.height == UINT32_MAX ? (uint32_t)s_fb_h * 2 : caps.currentExtent.height;
+    if (caps.currentExtent.width == UINT32_MAX) {
+        int ww = 0, wh = 0;                 /* Wayland: the window's own pixels */
+        host_window_pixels(&ww, &wh);
+        *w = ww > 0 ? (uint32_t)ww : (uint32_t)s_fb_w * 2;
+        *h = wh > 0 ? (uint32_t)wh : (uint32_t)s_fb_h * 2;
+    } else {
+        *w = caps.currentExtent.width;
+        *h = caps.currentExtent.height;
+    }
 }
 
 static int swap_make(void)
@@ -1328,11 +1405,13 @@ void rdr_frame_end(void)
     int show = 0;
     if (!s_recording)
         return;
+    if (s_lock)
+        host_mutex_lock(s_lock);
     if (s_in_pass) {
         vkCmdEndRenderPass(s_cmd);
         s_in_pass = 0;
     }
-    if (s_surface) {
+    if (s_surface && host_window_visible()) {
         window_size(&ww, &wh);
         if (s_swap && (ww != s_swap_w || wh != s_swap_h))
             swap_destroy();
@@ -1345,6 +1424,8 @@ void rdr_frame_end(void)
             else if (r == VK_SUCCESS || r == VK_SUBOPTIMAL_KHR)
                 show = 1;
         }
+    } else if (s_swap) {
+        swap_destroy();                             /* hidden: the other engine has the window */
     }
     if (show) {
         VkRenderPassBeginInfo rb = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
@@ -1400,8 +1481,11 @@ void rdr_frame_end(void)
         si.pSignalSemaphores = &s_sem_done[img];
     }
     vkResetFences(s_dev, 1, &s_fence);
-    if (!VK_OK(vkQueueSubmit(s_queue, 1, &si, s_fence)))
+    if (!VK_OK(vkQueueSubmit(s_queue, 1, &si, s_fence))) {
+        if (s_lock)
+            host_mutex_unlock(s_lock);
         return;
+    }
     s_submitted = 1;
     s_ndead_frame = s_ndead;                          /* freed up to now: reaped after this frame */
     if (show) {
@@ -1416,6 +1500,8 @@ void rdr_frame_end(void)
         if (r == VK_ERROR_OUT_OF_DATE_KHR || r == VK_SUBOPTIMAL_KHR)
             swap_destroy();
     }
+    if (s_lock)
+        host_mutex_unlock(s_lock);
 }
 
 /* the last frame read back (for screenshots only: it waits for the GPU) */

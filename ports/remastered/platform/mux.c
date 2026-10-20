@@ -117,6 +117,12 @@ void mux_front(int g)
                 qpush(was, &k);
             }
         s_front = g;
+#ifdef __linux__
+        /* the two renderers share one Wayland window, and Wayland allows one
+         * fifo object per wl_surface: the game leaving it lets go of its
+         * swapchain before the other game makes its own (host/linux) */
+        host_window_release_all();
+#endif
         music_targets(1);               /* the other game's music at once, not faded */
     }
     host_cond_broadcast(s_c);

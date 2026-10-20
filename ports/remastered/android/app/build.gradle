@@ -1,0 +1,56 @@
+// The APK: the game library (jniLibs, built by link.sh HOST=android RENDER=vulkan
+// into libremastered.so) and the game's files (assets/data, staged by build.sh).
+// No libraries beyond the NDK's: the activity is a plain android.app.Activity.
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.strutb.tgrally.remastered'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.strutb.tgrally.remastered'
+        minSdk 28                       // AAudio (26) and posix_spawn (28)
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+        }
+    }
+
+    signingConfigs {
+        release {
+            def ks = System.getenv('RM_KEYSTORE')
+            if (ks) {
+                storeFile file(ks)
+                storePassword System.getenv('RM_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('RM_KEY_ALIAS')
+                keyPassword System.getenv('RM_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            debuggable true
+        }
+        release {
+            minifyEnabled false
+            if (System.getenv('RM_KEYSTORE'))
+                signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false   // the .so files stay uncompressed, loaded as they are
+        }
+    }
+}

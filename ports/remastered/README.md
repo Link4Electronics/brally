@@ -1,7 +1,7 @@
 # Top Gear Rally Remastered
 
 Top Gear Rally's menus (or Boss Rally's, the player's choice) with Boss Rally's engine running the races, on macOS,
-Windows, Linux and the iPhone. Nothing here is byte-matched; both games are the
+Windows, Linux, iPhone and Android. Nothing here is byte-matched; both games are the
 native ports (`ports/tgrally`, `ports/brally`) built as libraries, with what
 Remastered adds laid over them (`tree.sh`).
 
@@ -19,14 +19,16 @@ Remastered adds laid over them (`tree.sh`).
 | `ports/tgrally/link.sh`, `HOST=lib` | Top Gear Rally as `libtgrally.a`, its `main()` as `tgr_main` |
 | `ports/brally/link64.sh`, `HOST=lib` | Boss Rally as `libbrally.a`, its `main()` as `br_main` |
 | `platform/thunks.c` | each game's calls to the host for the window, input, sound and folders, sent on to `mux_tgr_*` or `mux_br_*` |
-| `platform/mux.c` | the one real host (`host/macos`, `host/windows`, `host/null`, the iPhone's Swift) shared between the two |
-| `platform/main.c` | the process: Top Gear Rally on the main thread (on the iPhone, `rm_main` on a thread of the app's), Boss Rally started on its own thread at the first race |
+| `platform/mux.c` | the one real host (`host/macos`, `host/windows`, `host/linux`, `host/null`, iPhone's Swift, `android/host_android.c`) shared between the two |
+| `platform/main.c` | the process: Top Gear Rally on the main thread (on the iPhone and Android, `rm_main` on a thread of the app's), Boss Rally started on its own thread at the first race |
 | `link.sh` | makes the tree (`OUT/tree`), builds both libraries in it, makes each one object (its thunks inside, only its entry points global: the two games share some hundred function names), links the executable |
 | `package_app.sh` | `Top Gear Rally Remastered.app` (macOS) |
-| `music.sh` | Boss Rally's CD audio as FLAC, the PC's music, into the app (`package_app.sh`, `ios/build.sh`) |
+| `package_linux.sh` | `Top Gear Rally Remastered/` (Linux: the executable, the data track, the CD audio, a `.desktop`) |
+| `music.sh` | Boss Rally's CD audio as FLAC, the PC's music, into the app (`package_app.sh`, `package_linux.sh`, `ios/build.sh`, `android/build.sh`) |
 | `tools/` | the lighting's tests (`lighttest/`, run against `build/remastered/tree`; `surfparity.sh` the textures' surface maps against `texregion.py`), `lightcheck.sh`, `texmat_h.py`; `mixcheck.sh`, the music's routing in `mux.c` checked against computed values |
 | `ios/` | the iPhone app: `build.sh`, the xcodegen project, and in `Sources` the Swift host under the multiplexer (the Metal layer, events, Core Audio, the save folder) and the touch controls |
-| `icon.png` | the app's icon (the `.icns` on macOS, `icon.ico` beside the exe on Windows) |
+| `android/` | the Android app: `build.sh`, the Gradle project under `app/`, and `host_android.c` (the JNI, the surface, the event queue, AAudio, MediaCodec music, the pads); `README.md` describes it |
+| `icon.png` | the app's icon (the `.icns` on macOS, `icon.ico` beside the exe on Windows, the launcher's and the APK's on Linux and Android) |
 
 Each race is handed to Boss Rally (`host_race.h`,
 `tgrally/src/racing/handoff.c`, `brally/platform/common/race_handoff.c`).
@@ -143,11 +145,14 @@ leaves the front go up for it. The sound is one output at Top Gear Rally's
 rate: its music plays on under a Boss Rally race and Boss Rally's effects are
 added, resampled. On Windows Boss Rally draws into a child window over the
 client area while it is in front (a Vulkan swapchain owns the window it
-presents to); on macOS both draw into the window's Metal layer.
+presents to); on macOS both draw into the window's Metal layer; on Linux and
+Android both draw into the one Wayland surface (`host/linux`) or the app's
+window (`android/host_android.c`) in front.
 
 Saves: the app's folder (`Application Support/Top Gear Rally Remastered`
-on macOS and the iPhone, `%APPDATA%\Top Gear Rally Remastered`), Boss Rally's in its
-`Boss Rally` folder. Boss Rally's data is built in (`BRGlide.dll`'s, `DLL`)
+on macOS and the iPhone, `%APPDATA%\Top Gear Rally Remastered`,
+`~/.local/share/Top Gear Rally Remastered` on Linux, `filesDir/saves` in the
+APK), Boss Rally's in its `Boss Rally` folder. Boss Rally's data is built in (`BRGlide.dll`'s, `DLL`)
 and its data track is the CD root (`BR_CDROOT`, else
 `reference/brally/data/disc`, else the app's `disc`).
 
@@ -158,9 +163,12 @@ HOST=macos RENDER=metal ports/remastered/link.sh          # build/remastered/mac
 ports/remastered/package_app.sh                           # ... /Top Gear Rally Remastered.app
 CC=ports/brally/tools/wincc.sh HOST=windows RENDER=vulkan ports/remastered/link.sh
                                                           # build/remastered/windows-vulkan/remastered.exe
-HOST=null ports/remastered/link.sh                        # headless (Linux has no window host yet)
+HOST=null ports/remastered/link.sh                        # headless
+HOST=linux RENDER=vulkan ports/remastered/link.sh         # build/remastered/linux-vulkan/remastered
+ports/remastered/package_linux.sh                         # ... /Top Gear Rally Remastered/
 ports/remastered/ios/build.sh [--sim] [--install [--device ID]]
                                                           # build/remastered/ios-metal (ios-sim-metal)
+ports/remastered/android/build.sh                         # build/remastered/android-vulkan: the APK
 ```
 
 Check of the whole round trip, headless: Top Gear Rally's script starts a
@@ -175,6 +183,26 @@ scripted run (the Controls screen's checks).
 RM_LOG=1 BR_HANDOFF_AUTOPILOT=1 build/remastered/null-null/remastered --headless \
     --frames 100000000 --script tools/tgrally/n64box_scripts/champ_race.txt
 ```
+
+## Linux
+
+`HOST=linux` (Wayland, ALSA, evdev pads, music through FFmpeg; needs
+`wayland-client`, `xkbcommon` and `alsa` development packages, and
+`wayland-egl` for `RENDER=gl`) builds the whole thing into one executable:
+the two games, the host and the renderer. `ports/remastered/package_linux.sh`
+makes a folder with it, Boss Rally's data track, its CD audio and a `.desktop`
+file; keep it anywhere and run `remastered` (or set `BR_RESDIR`, `BR_CDROOT`,
+`BR_MUSICDIR`, `BR_SAVEDIR`). The keyboard is the first player's pad (the
+arrows the stick, X or Return A, Z B, Space Z, Escape or P START), the mouse
+the second player's in split screen, and both game controllers are read
+(`/dev/input/event*`).
+
+## Android
+
+`ports/remastered/android/build.sh` builds the APK: `libremastered.so` per ABI
+(`link.sh`, `HOST=android RENDER=vulkan`), Boss Rally's data track and CD
+audio as assets, the icon, and Gradle. The touch screen is the pad and the
+menus, a controller is the second pad; see `android/README.md`.
 
 ## The iPhone
 

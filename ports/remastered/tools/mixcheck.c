@@ -42,6 +42,9 @@ void host_message_box(const char *a, const char *b) { (void)a; (void)b; }
 void *host_window_handle(void) { return NULL; }
 void host_window_pixels(int *w, int *h) { *w = *h = 0; }
 void host_present(const uint32_t *p, int w, int h) { (void)p; (void)w; (void)h; }
+void host_window_release_register(host_window_release_fn fn, void *user) { (void)fn; (void)user; }
+void host_window_release_unregister(host_window_release_fn fn, void *user) { (void)fn; (void)user; }
+void host_window_release_all(void) {}
 host_stream *host_stream_open(const char *p, int r) { (void)p; (void)r; return NULL; }
 int host_stream_read(host_stream *s, float *lr, int n) { (void)s; (void)lr; (void)n; return 0; }
 void host_stream_close(host_stream *s) { (void)s; }

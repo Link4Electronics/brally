@@ -2,8 +2,10 @@
 # Link the portable 64-bit game: the core (build64.sh), the data lifted from
 # the user's BRGlide.dll (tools/brally/datalift.py, generated under build/), and
 # the platform layer for one host.
-#   env: HOST   null (default, headless) | macos | windows | lib (a static library,
-#               libbrally.a, for an app that brings its own host; main() is br_main)
+#   env: HOST   null (default, headless) | macos | windows | linux (Wayland, ALSA,
+#               evdev pads; needs wayland-client, xkbcommon and alsa; music through
+#               FFmpeg when it is found) | lib (a static library, libbrally.a, for
+#               an app that brings its own host; main() is br_main)
 #        RENDER null (default) | metal (metal needs HOST=macos) | vulkan (Vulkan headers
 #               and loader: VULKAN_SDK, else Homebrew's; on macOS it runs on MoltenVK) |
 #               gl (OpenGL 3.3 core: the fallback on a PC without Vulkan; on macOS
@@ -27,7 +29,13 @@ export OUT
 CC=${CC:-clang}
 P=ports/brally/platform
 PFLAGS="-O2 ${GFLAG:--g} -std=gnu11 -Wall -Wno-unused-function -ffp-contract=off -I$P/include -I$P/host -I$P/render -I$P/common"
-case "$($CC -dumpmachine 2>/dev/null)" in *mingw*|*windows*) PFLAGS="-include $P/include/br_winemu.h $PFLAGS -Ddllimport=";; esac
+TARGET=$($CC -dumpmachine 2>/dev/null)
+case "$TARGET" in
+  *mingw*|*windows*) SYS=windows; PFLAGS="-include $P/include/br_winemu.h $PFLAGS -Ddllimport=";;
+  *apple*|*darwin*)  SYS=macos;;
+  *)                 SYS=linux;;
+esac
+HFLAGS=                                     # the host's own compile flags (system headers)
 mkdir -p $OUT/plat
 
 ports/brally/build64.sh
@@ -52,12 +60,17 @@ SRCS="$P/common/main.c $P/common/crt.c $P/common/win_kernel.c $P/common/win_user
 case "$($CC -dumpmachine 2>/dev/null)" in
   *mingw*|*windows*) OSHOST=$P/host/win32/host_win32.c; EXE=.exe
                      LDCXX=${LDCXX:-x86_64-w64-mingw32-g++}; OSLIBS="-static -lws2_32";;
-  *)                 OSHOST=$P/host/posix/host_posix.c; EXE=; LDCXX=${LDCXX:-clang++}; OSLIBS=;;
+  *)                 OSHOST=$P/host/posix/host_posix.c; EXE=; LDCXX=${LDCXX:-clang++}
+                     if [ $SYS = linux ]; then OSLIBS="-pthread"; else OSLIBS=; fi;;
 esac
 if [ "$RENDER" = vulkan ]; then
-  VK=${VULKAN_SDK:-$(brew --prefix 2>/dev/null)}
-  PFLAGS="$PFLAGS -I$VK/include"
-  VKLIBS="-L$VK/lib -lvulkan"
+  if [ $SYS = linux ]; then
+    VKLIBS="-lvulkan"                       # the loader and headers are the system's
+  else
+    VK=${VULKAN_SDK:-$(brew --prefix 2>/dev/null)}
+    PFLAGS="$PFLAGS -I$VK/include"
+    VKLIBS="-L$VK/lib -lvulkan"
+  fi
   if [ -n "$EXE" ]; then
     # Windows: link against vulkan-1.dll through an import library made
     # from the functions the renderer calls (no Vulkan SDK needed to build)
@@ -68,9 +81,13 @@ if [ "$RENDER" = vulkan ]; then
   fi
 fi
 if [ "$RENDER" = gl ]; then
-  # the context (WGL, CGL), built with the system's headers as the OS layer is
+  # the context (WGL, CGL, EGL), built with the system's headers as the OS layer is
   SRCS="$SRCS $P/render/gl/gl_ctx.c"
-  if [ -n "$EXE" ]; then GLLIBS="-lopengl32 -lgdi32"; else GLLIBS="-framework OpenGL"; fi
+  case $SYS in
+    linux) GLLIBS="-lEGL -lwayland-egl";
+           pkg-config --exists egl wayland-egl || { echo "link64: missing EGL / wayland-egl (render gl)" >&2; exit 1; };;
+    *)     if [ -n "$EXE" ]; then GLLIBS="-lopengl32 -lgdi32"; else GLLIBS="-framework OpenGL"; fi;;
+  esac
 fi
 case "$HOST" in
   null)  SRCS="$SRCS $OSHOST $P/host/null/host_null.c"
@@ -81,15 +98,30 @@ case "$HOST" in
   lib)   SRCS="$SRCS $OSHOST";;                  # the app's own
   macos) SRCS="$SRCS $OSHOST $P/host/macos/host_macos.m"
          LIBS="-framework Cocoa -framework Metal -framework QuartzCore -framework ImageIO -framework AudioToolbox -framework GameController";;
+  linux) [ $SYS = linux ] || { echo "link64: HOST=linux needs a compiler for Linux" >&2; exit 2; }
+         SRCS="$SRCS $OSHOST $P/host/linux/host_linux.c $P/host/linux/xdg-shell-protocol.c $P/host/linux/xdg-decoration-protocol.c"
+         pkg-config --exists wayland-client xkbcommon alsa ||
+           { echo "link64: missing wayland-client, xkbcommon or alsa" >&2; exit 1; }
+         LIBS="$(pkg-config --libs wayland-client xkbcommon alsa)"
+         if pkg-config --exists libavformat libavcodec libswresample libavutil; then
+           HFLAGS="-DBR_HAVE_FFMPEG $(pkg-config --cflags libavformat libavcodec libswresample libavutil)"
+           LIBS="$LIBS $(pkg-config --libs libavformat libavcodec libswresample libavutil)"
+         else
+           echo "link64: FFmpeg not found: the music will be silent" >&2
+         fi;;
+  *) echo "link64: unknown HOST $HOST" >&2; exit 2;;
 esac
 OBJS=""
 for s in $SRCS; do
   o=$OUT/plat/$(basename "$s").o
   case "$s" in *.m) X="-x objective-c -fobjc-arc";; *) X="";; esac
   [ "$HOST" = lib ] && [ "$s" = $P/common/main.c ] && X=-Dmain=br_main   # the app owns main()
-  if [ "$s" = "$OSHOST" ] || [ "$s" = "$P/host/windows/host_windows.c" ] || [ "$s" = "$P/render/gl/gl_ctx.c" ]; then
+  if [ "$s" = "$OSHOST" ] || [ "$s" = "$P/host/windows/host_windows.c" ] || \
+     [ "$s" = "$P/host/linux/host_linux.c" ] || [ "$s" = "$P/host/linux/xdg-shell-protocol.c" ] || \
+     [ "$s" = "$P/host/linux/xdg-decoration-protocol.c" ] || \
+     [ "$s" = "$P/render/gl/gl_ctx.c" ]; then
     # the OS layer sees the real system headers, not the game's Win32 surface
-    $CC -O2 ${GFLAG:--g} -std=gnu11 -Wall -I$P/host -c "$s" -o "$o"
+    $CC -O2 ${GFLAG:--g} -std=gnu11 -Wall -I$P/host $HFLAGS -c "$s" -o "$o"
   else
     $CC $PFLAGS $X -c "$s" -o "$o"
   fi

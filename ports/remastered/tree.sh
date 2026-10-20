@@ -41,8 +41,9 @@ make_tree() {
         case " $GAMES " in *" $e "*) continue;; esac
         [ -e "$ROOT/ports/$e" ] || ln -s "$REPO/ports/$e" "$ROOT/ports/$e"
     done
-    # the verified build's placement (link64.sh makes it once)
-    [ -e "$ROOT/build/brally/placement" ] || ln -s "$REPO/build/brally/placement" "$ROOT/build/brally/placement"
+    # the verified build's placement (link64.sh makes it once; a dangling
+    # link from an interrupted run is replaced)
+    [ -e "$ROOT/build/brally/placement" ] || ln -sfn "$REPO/build/brally/placement" "$ROOT/build/brally/placement"
     for g in $GAMES; do
         rsync -a --delete --exclude __pycache__ "$REPO/ports/$g/" "$ROOT/ports/$g/"
         if [ -d "$R/$g" ]; then

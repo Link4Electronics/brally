@@ -11,9 +11,9 @@ carries its own differences.
 
 | folder | what |
 |---|---|
-| `brally/` | Boss Rally, native 64-bit: a retyped fork of the decomp's core (`src/`, `include/`) plus a cross-platform layer (`platform/`: hosts null / macOS / Windows, renderers null / soft / Metal / Vulkan). `PORTABLE-CORE.md` describes it. |
+| `brally/` | Boss Rally, native 64-bit: a retyped fork of the decomp's core (`src/`, `include/`) plus a cross-platform layer (`platform/`: hosts null / macOS / Windows / Linux, renderers null / soft / Metal / Vulkan / GL). `PORTABLE-CORE.md` describes it. |
 | `tgrally/` | Top Gear Rally, native: a fork of the N64 decomp with an arena memory model and the same hosts. `PORT.md` describes it. |
-| `remastered/` | Top Gear Rally Remastered: Top Gear Rally's menus with Boss Rally's engine running the races, the two native ports in one executable over one host (macOS, Windows, the iPhone; Linux headless), with its own files and changes laid over them (`tree.sh`): the two ports are the games alone. `README.md` describes it. |
+| `remastered/` | Top Gear Rally Remastered: Top Gear Rally's menus with Boss Rally's engine running the races, the two native ports in one executable over one host (macOS, Windows, Linux, the iPhone, Android), with its own files and changes laid over them (`tree.sh`): the two ports are the games alone. `README.md` describes it. |
 | `common/` | the Remastered assets (models, textures, music). The binaries stay out of git; their recipes are tracked. |
 
 ## Building and checking
@@ -21,6 +21,7 @@ carries its own differences.
 ```sh
 # Boss Rally 64-bit: one host and one renderer per build -> build/brally/HOST-RENDER/
 HOST=macos RENDER=metal ports/brally/link64.sh
+HOST=linux RENDER=vulkan ports/brally/link64.sh     # Wayland window, ALSA, evdev pads
 RENDER=soft ports/brally/link64.sh                 # headless, the reference rasteriser
 ports/brally/tools/suite.sh                         # every brbox scenario, headless
 ports/brally/package_app.sh                         # build/brally/macos-metal/Boss Rally 64.app
@@ -28,14 +29,18 @@ ports/brally/package_app.sh                         # build/brally/macos-metal/B
 
 # Top Gear Rally -> build/tgrally/HOST-RENDER/
 HOST=macos RENDER=metal ports/tgrally/link.sh
+HOST=linux RENDER=vulkan ports/tgrally/link.sh      # TGR_ROM=... the cartridge's data is built in
 .venv/bin/python ports/tgrally/tools/suite.py       # every n64box script vs the original's streams
 .venv/bin/python ports/tgrally/tools/sync.py        # carry decomp changes into the fork
 ports/tgrally/package_app.sh                        # build/tgrally/macos-metal/Top Gear Rally.app
 
 # Top Gear Rally Remastered (both games) -> build/remastered/HOST-RENDER/
 HOST=macos RENDER=metal ports/remastered/link.sh
+HOST=linux RENDER=vulkan ports/remastered/link.sh   # both games, one Wayland window
 ports/remastered/package_app.sh                     # build/remastered/macos-metal/Top Gear Rally Remastered.app
+ports/remastered/package_linux.sh                   # build/remastered/linux-vulkan/Top Gear Rally Remastered/
 ports/remastered/ios/build.sh [--sim]               # build/remastered/ios-metal: the iPhone app
+ports/remastered/android/build.sh                   # build/remastered/android-vulkan: the APK (NDK, Gradle)
 ```
 
 `Boss Rally 64.app` carries everything it reads: the whole data track as its

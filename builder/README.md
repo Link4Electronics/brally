@@ -23,8 +23,10 @@ Releases page; nothing here ships game data.
 The result needs no dump nor this tree: it carries the cartridge from ROM
 0x70AB0 on as `romdata.bin`, the CD's data track as `disc` (BRGlide.dll's
 initialised data is read from there at start-up) and its audio tracks as FLAC
-in `music/cd` (Boss Rally's soundtrack, and Remastered's PC music). Linux is not
-built yet (no Linux window host in the ports).
+in `music/cd` (Boss Rally's soundtrack, and Remastered's PC music). The ports
+also build for Linux (`HOST=linux`, `ports/remastered/package_linux.sh`) and
+Android (`ports/remastered/android/build.sh`); this builder app offers only
+macOS and Windows so far.
 
 ## Layout
 

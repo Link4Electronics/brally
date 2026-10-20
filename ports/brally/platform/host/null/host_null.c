@@ -58,6 +58,9 @@ void *host_window_handle(void) { return NULL; }
 void host_window_pixels(int *w, int *h) { *w = *h = 0; }
 int host_window_visible(void) { return 0; }
 void host_window_lock_aspect(int lock) { (void)lock; }
+void host_window_release_register(host_window_release_fn fn, void *user) { (void)fn; (void)user; }
+void host_window_release_unregister(host_window_release_fn fn, void *user) { (void)fn; (void)user; }
+void host_window_release_all(void) {}
 
 void host_present(const uint32_t *argb, int w, int h)
 {

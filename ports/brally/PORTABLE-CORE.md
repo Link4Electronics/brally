@@ -17,7 +17,7 @@ thin platform layer under it:
 |---|---|---|
 | macOS | Metal (or Vulkan on MoltenVK) | plays |
 | Windows | Vulkan | builds |
-| Linux | Vulkan | not started (a window host is what is missing) |
+| Linux | Vulkan (or GL) | plays (Wayland + ALSA host, `platform/host/linux`) |
 
 Game logic is built once, for every OS. Each OS supplies only the platform
 backends (window, input, audio out, timing, files, CD audio, renderer).

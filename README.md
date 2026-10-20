@@ -293,7 +293,7 @@ derived platform code, not byte-matched.
     tools/toolchains/            MSVC 5.0, Wine, IDO 5.3 (staged by setup.sh)
     docs/{brally,tgrally}/       procedure, rules, and everything the work learned
     ports/brally/                the native 64-bit port: a retyped fork of the core
-                                 plus a cross-platform layer (macOS, Windows)
+                                 plus a cross-platform layer (macOS, Windows, Linux)
     ports/tgrally/               the native Top Gear Rally port
     ports/common/                Remastered assets (recipes tracked, binaries not)
     reference/                   the original disc, ROM, compilers and corpora (not tracked)
@@ -323,7 +323,7 @@ Further reading: [docs/brally/ARCHITECTURE.md](docs/brally/ARCHITECTURE.md), [do
 - The playable builds are the [Boss Rally native port](#native-ports)
   (macOS, Windows, headless; its scenario suite is `ports/brally/tools/suite.sh`)
   and Top Gear Rally Remastered (`ports/remastered`), which runs it behind Top
-  Gear Rally's menus on macOS, Windows and the iPhone.
+  Gear Rally's menus on macOS, Windows, Linux, iPhone and Android.
 
 ### Reference data (you supply; none tracked in git)
 
@@ -420,9 +420,9 @@ run natively on modern computers, with no emulator:
 
 | Game | What it is | Runs on |
 |---|---|---|
-| **Boss Rally** | The 1999 PC game, as it shipped. 4:3 picture, the original music and menus. | macOS, Windows |
-| **Top Gear Rally** | The 1997 N64 game, as it shipped. | macOS, Windows |
-| **Top Gear Rally Remastered** | The best of both: Top Gear Rally's menus, with Boss Rally's engine driving the races. Adds widescreen, a choice of PC or N64 music, an FPS counter, and two-player split screen. | macOS, Windows, iPhone and iPad |
+| **Boss Rally** | The 1999 PC game, as it shipped. 4:3 picture, the original music and menus. | macOS, Windows, Linux |
+| **Top Gear Rally** | The 1997 N64 game, as it shipped. | macOS, Windows, Linux |
+| **Top Gear Rally Remastered** | The best of both: Top Gear Rally's menus, with Boss Rally's engine driving the races. Adds widescreen, a choice of PC or N64 music, an FPS counter, and two-player split screen. | macOS, Windows, Linux, iPhone and iPad, Android |
 
 The first two are faithful ports: they play just like the originals.
 Remastered is where the improvements live.

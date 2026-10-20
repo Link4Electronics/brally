@@ -72,6 +72,7 @@ static int          s_track, s_to;               /* playing, last of the play; 0
 static int          s_paused, s_feeding_done, s_ended, s_gen;
 static float        s_vol = 1.0f;
 static host_stream *s_stream;
+static host_stream *s_reading;                   /* the stream the feeder has in host_stream_read */
 static int          s_first, s_last;             /* the disc's track numbers, 0 unknown */
 static void       (*s_end_fn)(void *user);
 static void        *s_end_user;
@@ -144,9 +145,13 @@ static void *feeder(void *arg)
         }
         {
             host_stream *st = s_stream;
+            s_reading = st;                      /* (plat_cd_play/stop free it only when NULL) */
             cdunlock();
             got = host_stream_read(st, buf, 4096);
             cdlock();
+            s_reading = NULL;
+            if (st != s_stream)                  /* a new play began: the old one is ours to free */
+                host_stream_close(st);
         }
         if (s_cap && s_fed >= s_cap)
             got = 0;                             /* BR_CDLEN: the track ends here */
@@ -206,10 +211,10 @@ int plat_cd_play(int from, int to, void (*end_fn)(void *), void *user)
     int audible;
     audible = music_on() && track_path(from, p, sizeof p);
     cdlock();
-    if (s_stream) {
-        host_stream_close(s_stream);
-        s_stream = NULL;
+    if (s_stream && s_stream != s_reading) {
+        host_stream_close(s_stream);             /* (the feeder frees the one it is reading) */
     }
+    s_stream = NULL;
     s_gen++;
     s_rd = s_wr = 0;
     s_track = from;
@@ -243,10 +248,10 @@ void plat_cd_stop(void)
 {
     cdlock();
     s_gen++;
-    if (s_stream) {
-        host_stream_close(s_stream);
-        s_stream = NULL;
+    if (s_stream && s_stream != s_reading) {
+        host_stream_close(s_stream);             /* (the feeder frees the one it is reading) */
     }
+    s_stream = NULL;
     s_track = 0;
     s_ended = 0;
     s_rd = s_wr = 0;

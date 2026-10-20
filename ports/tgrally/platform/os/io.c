@@ -11,7 +11,7 @@
 
 int32_t  osTvType = 1;              /* NTSC */
 uint32_t osMemSize = 0x400000;      /* 4 MB, no Expansion Pak */
-uint64_t osClockRate = 62500000;
+unsigned long long osClockRate = 62500000;
 uint32_t osRomBase = 0xB0000000;
 int32_t  osResetType = 0;
 

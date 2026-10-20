@@ -8,13 +8,18 @@
 #               linked into one object with its own thunks to the host
 #               (platform/thunks.c) and only its entry points global: the two
 #               share some hundred function names
-#   the host:   one real host under both (host/macos, host/windows, host/null, or
-#               the iPhone app's Swift: ios/Sources), shared out by platform/mux.c;
+#   the host:   one real host under both (host/macos, host/windows, host/linux,
+#               host/null, the iPhone app's Swift: ios/Sources, or the Android
+#               app's JNI: android/host_android.c), shared out by platform/mux.c;
 #               platform/main.c is the process
 #
-#   env: HOST    null (default, headless: Linux has no window host yet) | macos | windows |
-#                ios (libgames.a for the iPhone app, ios/build.sh: CC=ports/remastered/ios/cc.sh;
-#                main() is rm_main, run on a thread of the app's)
+#   env: HOST    null (default, headless) | macos | windows | linux (Wayland, ALSA,
+#                evdev pads; needs wayland-client, xkbcommon and alsa; music through
+#                FFmpeg when it is found) | ios (libgames.a for the iPhone app,
+#                ios/build.sh: CC=ports/remastered/ios/cc.sh; main() is rm_main, run
+#                on a thread of the app's) | android (libremastered.so for the APK,
+#                android/build.sh: CC is the NDK's clang, RENDER must be vulkan; the
+#                Java app hands the surface and the touch screen to it)
 #        RENDER  null (default) | metal (HOST=macos) | vulkan | gl (OpenGL 3.3: Windows'
 #                fallback for a PC without Vulkan; offscreen on macOS, for checks) |
 #                soft (deprecated: the CPU reference the renderers are checked against)
@@ -33,7 +38,8 @@ CC=${CC:-clang}
 R=ports/remastered/platform
 T=$OUT/tree                           # the two ports as Remastered builds them (tree.sh)
 H=$T/ports/brally/platform/host
-case "$($CC -dumpmachine 2>/dev/null)" in
+TARGET=$($CC -dumpmachine 2>/dev/null)
+case "$TARGET" in
   *mingw*|*windows*) OS=windows;;
   *apple*|*darwin*)  OS=macos;;
   *)                 OS=elf;;
@@ -43,6 +49,10 @@ case "$HOST" in
   macos) [ $OS = macos ] || { echo "link: HOST=macos needs a compiler for macOS" >&2; exit 2; };;
   windows) [ $OS = windows ] || { echo "link: HOST=windows needs CC=ports/brally/tools/wincc.sh" >&2; exit 2; };;
   ios) [ $OS = macos ] || { echo "link: HOST=ios needs CC=ports/remastered/ios/cc.sh" >&2; exit 2; };;
+  linux) case "$TARGET" in *linux*|"") ;; *) echo "link: HOST=linux needs a compiler for Linux" >&2; exit 2;; esac;;
+  android) case "$TARGET" in *android*) ;; *) echo "link: HOST=android needs the NDK's clang" >&2; exit 2;; esac
+           [ "$RENDER" = vulkan ] || { echo "link: HOST=android needs RENDER=vulkan" >&2; exit 2; }
+           GFLAG="${GFLAG:--g} -fPIC"; export GFLAG;;   # the code goes into a shared library
   *) echo "link: unknown HOST $HOST" >&2; exit 2;;
 esac
 mkdir -p $OUT/plat
@@ -101,6 +111,20 @@ case "$HOST" in
            LIBS="-framework Cocoa -framework AudioToolbox -framework CoreAudio -framework GameController -framework QuartzCore -framework Metal -weak_framework MetalFX -framework ImageIO -framework AVFoundation";;
   windows) SRCS="$SRCS $H/windows/host_windows.c"
            LIBS="-lgdi32 -luser32 -lshell32 -lole32 -luuid -lmfplat -lmfreadwrite -lmfuuid -lxinput9_1_0 -mwindows";;
+  linux)   SRCS="$SRCS $H/linux/host_linux.c $H/linux/xdg-shell-protocol.c $H/linux/xdg-decoration-protocol.c"
+           [ -f "$H/linux/xdg-shell-protocol.c" ] && [ -f "$H/linux/xdg-decoration-protocol.c" ] ||
+             { echo "link: the tree lacks the xdg-shell or xdg-decoration protocol" >&2; exit 1; }
+           pkg-config --exists wayland-client xkbcommon alsa ||
+             { echo "link: missing wayland-client, xkbcommon or alsa" >&2; exit 1; }
+           LIBS="$(pkg-config --libs wayland-client xkbcommon alsa)"
+           if pkg-config --exists libavformat libavcodec libswresample libavutil; then
+             RM_HOSTFLAGS="-DBR_HAVE_FFMPEG $(pkg-config --cflags libavformat libavcodec libswresample libavutil)"
+             LIBS="$LIBS $(pkg-config --libs libavformat libavcodec libswresample libavutil)"
+           else
+             echo "link: FFmpeg not found: the music will be silent" >&2
+           fi;;
+  android) SRCS="$SRCS ports/remastered/android/host_android.c"
+           LIBS="-landroid -llog -laaudio -lmediandk -lm";;
 esac
 VKLIBS=
 if [ "$RENDER" = vulkan ]; then
@@ -112,6 +136,8 @@ if [ "$RENDER" = vulkan ]; then
         grep -o 'vk[A-Z][A-Za-z0-9]*(' | tr -d '(' | sort -u; } > $OUT/vulkan-1.def
     x86_64-w64-mingw32-dlltool -d $OUT/vulkan-1.def -l $OUT/libvulkan-1.a
     VKLIBS="-L$OUT -lvulkan-1"
+  elif [ "$HOST" = linux ] || [ "$HOST" = android ]; then
+    VKLIBS="-lvulkan"                       # the loader and headers are the system's
   else
     VK=${VULKAN_SDK:-$(brew --prefix 2>/dev/null)}
     VKLIBS="-L$VK/lib -lvulkan"
@@ -124,10 +150,13 @@ OBJS=
 for s in $SRCS; do
   o=$OUT/plat/$(basename "$s").o
   case "$s" in *.m) X="-x objective-c -fobjc-arc";; *) X=;; esac
-  [ "$HOST" = ios ] && [ "$s" = $R/main.c ] && X=-Dmain=rm_main     # UIKit owns main()
+  case "$HOST" in ios|android)
+    [ "$s" = $R/main.c ] && X="$X -Dmain=rm_main";;                 # the app owns main()
+  esac
   # the host and the multiplexer see the real system headers, not either game's
   # (the options see each game's switches: tgr_view.h, br_flags.h)
-  [ "$s" = $R/options.c ] && X="-I$T/ports/tgrally/platform/include -I$T/ports/brally/platform/include"
+  [ "$s" = $R/options.c ] && X="$X -I$T/ports/tgrally/platform/include -I$T/ports/brally/platform/include"
+  [ "$s" = "$H/linux/host_linux.c" ] && X="$X $RM_HOSTFLAGS"
   $CC -O2 ${GFLAG:--g} -std=gnu11 -Wall $X -I$H -I$R $XFLAGS -c "$s" -o "$o"
   OBJS="$OBJS $o"
 done
@@ -142,6 +171,13 @@ if [ "$HOST" = ios ]; then
   rm -f $OUT/libgames.a
   ar rcs $OUT/libgames.a $OUT/tgrally.o $OUT/brally.o $OBJS
   echo "archived $OUT/libgames.a (host ios, renderer $RENDER)"
+  exit 0
+fi
+if [ "$HOST" = android ]; then
+  rm -f $OUT/libremastered.so
+  $CC -shared -Wl,-soname,libremastered.so -Wl,--no-undefined \
+      -o $OUT/libremastered.so $OUT/tgrally.o $OUT/brally.o $OBJS $LIBS $VKLIBS $OSLIBS
+  echo "linked $OUT/libremastered.so (host android, renderer $RENDER)"
   exit 0
 fi
 $LDXX ${LDFLAGS_RM} -o "$OUT/remastered$EXE" $OUT/tgrally.o $OUT/brally.o $OBJS $LIBS $VKLIBS $OSLIBS

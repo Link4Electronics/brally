@@ -382,6 +382,11 @@ int host_window_visible(void)
     return s_win && ([s_win occlusionState] & NSWindowOcclusionStateVisible) != 0;
 }
 
+/* one renderer per window here: nothing to release between them */
+void host_window_release_register(host_window_release_fn fn, void *user) { (void)fn; (void)user; }
+void host_window_release_unregister(host_window_release_fn fn, void *user) { (void)fn; (void)user; }
+void host_window_release_all(void) {}
+
 /* the window's CAMetalLayer, for a renderer that draws with Metal (macOS
  * only: render/metal asks for it; the view's layer becomes a Metal layer) */
 CAMetalLayer *host_macos_metal_layer(void)

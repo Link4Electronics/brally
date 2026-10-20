@@ -34,6 +34,7 @@ this way, so the executable carries none of the original's data.
 Usage: datalift.py [--dll reference/brally/orig/BRGlide.dll] [--runtime-image]
 """
 import bisect
+import csv
 import json
 import os
 import re
@@ -278,6 +279,16 @@ class Syms:
             p = line.strip().split(',')
             if len(p) >= 2 and p[0].startswith('0x') and p[1] in defined:
                 self.fn[int(p[0], 16)] = p[1]
+        # Placement holds only the functions the verified build certifies.
+        # filing.csv names every ported function at its original address;
+        # the image's data (the vtables) points at some the placement does
+        # not, and an unmapped one is written as a NULL function pointer.
+        try:
+            for r in csv.reader(open('config/brally/filing.csv')):
+                if len(r) >= 2 and r[0].startswith('0x') and r[1] in defined:
+                    self.fn.setdefault(int(r[0], 16), r[1])
+        except FileNotFoundError:
+            pass
 
     def add_global(self, va, size, name, ty, qt=None):
         self.g.append((va, size, name, ty))

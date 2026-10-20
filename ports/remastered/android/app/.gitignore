@@ -1,0 +1,4 @@
+build/
+src/main/assets/data/
+src/main/jniLibs/
+src/main/res/drawable/icon.png

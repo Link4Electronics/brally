@@ -98,6 +98,17 @@ void *host_window_handle(void);
 void host_window_pixels(int *w, int *h);
 /* a finished frame of ARGB pixels (0xAARRGGBB), top row first, for the window */
 void host_present(const uint32_t *argb, int w, int h);
+/* a renderer's window resources (its Vulkan swapchain, its EGL surface):
+ * registered while they exist, released when the window passes from one
+ * renderer to another.  One window can have two of them (Remastered runs two
+ * engines); Wayland allows only one fifo object per wl_surface, so the one
+ * leaving the window must let go of its swapchain first.  The release runs
+ * on the thread that changes the front, and must be safe to call while the
+ * renderer is presenting (the renderer serialises it with its own lock). */
+typedef void (*host_window_release_fn)(void *user);
+void host_window_release_register(host_window_release_fn fn, void *user);
+void host_window_release_unregister(host_window_release_fn fn, void *user);
+void host_window_release_all(void);
 
 /* ---- audio out ------------------------------------------------------------------ */
 /* the mixer callback fills frames of interleaved stereo float */

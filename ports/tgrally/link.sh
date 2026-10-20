@@ -2,12 +2,15 @@
 # Link Top Gear Rally: the core (build.sh), the symbol table and arena
 # generated from the source (tools/globals.py), the platform layer, and one
 # host (shared with the Boss Rally port: ports/brally/platform/host).
-#   env: HOST    null (default, headless) | macos | windows | lib (a static library,
-#                libtgrally.a, for an app that brings its own host; main() is tgr_main)
+#   env: HOST    null (default, headless) | macos | windows | linux (Wayland, ALSA,
+#                evdev pads; needs wayland-client, xkbcommon and alsa; music through
+#                FFmpeg when it is found) | lib (a static library, libtgrally.a, for
+#                an app that brings its own host; main() is tgr_main)
 #        RENDER  null (default) | soft (deprecated: the CPU reference the renderers
-#                are checked against) | metal (needs HOST=macos) | vulkan (Windows; on
-#                macOS through MoltenVK: VULKAN_SDK, else Homebrew's) | gl (OpenGL 3.3, the
-#                fallback for a PC without Vulkan; offscreen on macOS, for checks)
+#                are checked against) | metal (needs HOST=macos) | vulkan (Windows and
+#                Linux's system loader; on macOS through MoltenVK: VULKAN_SDK, else
+#                Homebrew's) | gl (OpenGL 3.3, the fallback for a PC without Vulkan;
+#                offscreen on macOS, for checks)
 #        CC      a compiler aimed at Windows (ports/brally/tools/wincc.sh) links
 #                tgrally.exe: host/win32 replaces host/posix
 #        OUT     build directory (default build/tgrally/null-null/HOST-RENDER)
@@ -31,6 +34,7 @@ P=ports/tgrally/platform
 H=ports/brally/platform/host
 PFLAGS="-O2 ${GFLAG:--g} -std=gnu11 -Wall -Wno-unused-function -ffp-contract=off -fno-strict-aliasing \
   -I$P/include -I$P/os -I$H -Iports/brally/platform/render -Iports/tgrally/include"
+HFLAGS=                                     # the host's own compile flags (system headers)
 mkdir -p $OUT/plat
 
 ports/tgrally/build.sh
@@ -42,8 +46,9 @@ fi
 $CC -c $PFLAGS -fno-builtin -w $OUT/gen/tgr_syms.c -o $OUT/plat/tgr_syms.o
 $CC -c $OUT/gen/arena.s -o $OUT/plat/arena.o
 ROMDATA=${ROMDATA:-embed}
+PYTHON=${PYTHON:-.venv/bin/python}; [ -x "$PYTHON" ] || PYTHON=python3
 if [ "$ROMDATA" = embed ]; then
-  ${PYTHON:-.venv/bin/python} ports/tgrally/tools/assets.py $OUT/assets
+  $PYTHON ports/tgrally/tools/assets.py $OUT/assets
   [ $OUT/plat/romdata.o -nt $OUT/assets/romdata.S ] || $CC -c $OUT/assets/romdata.S -o $OUT/plat/romdata.o
   BLOB=$OUT/plat/romdata.o
   PFLAGS="$PFLAGS -DTGR_ROMDATA_EMBED"
@@ -58,7 +63,8 @@ SRCS="$P/os/addr.c $P/os/romdata.c $P/os/lift.c $P/os/thread.c $P/os/io.c $P/os/
 case "$TGR_TARGET" in
   *mingw*|*windows*) OSHOST=$H/win32/host_win32.c; EXE=.exe; LD=${LD_TGR:-x86_64-w64-mingw32-gcc}
                      OSLIBS="-static -lws2_32"; ZLIB=;;
-  *)                 OSHOST=$H/posix/host_posix.c; EXE=; LD=$CC; OSLIBS=; ZLIB=-lz;;
+  *)                 OSHOST=$H/posix/host_posix.c; EXE=; LD=$CC; OSLIBS=; ZLIB=-lz
+                     case "$TGR_TARGET" in *linux*) OSLIBS="-pthread";; esac;;
 esac
 SRCS="$SRCS $OSHOST"
 case "$RENDER" in
@@ -71,8 +77,11 @@ case "$RENDER" in
 esac
 VKLIBS=
 if [ "$RENDER" = vulkan ]; then
-  VK=${VULKAN_SDK:-$(brew --prefix 2>/dev/null)}
-  PFLAGS="$PFLAGS -I$VK/include"
+  case "$TGR_TARGET" in
+    *linux*) VKLIBS="-lvulkan";;            # the loader and headers are the system's
+    *)       VK=${VULKAN_SDK:-$(brew --prefix 2>/dev/null)}
+             PFLAGS="$PFLAGS -I$VK/include";;
+  esac
   if [ -n "$EXE" ]; then
     # Windows: vulkan-1.dll through an import library made from the functions
     # the renderer calls (no Vulkan SDK needed to build)
@@ -80,13 +89,17 @@ if [ "$RENDER" = vulkan ]; then
       grep -o 'vk[A-Z][A-Za-z0-9]*(' $P/render/vulkan/rdr_vulkan.c | tr -d '(' | sort -u; } > $OUT/vulkan-1.def
     x86_64-w64-mingw32-dlltool -d $OUT/vulkan-1.def -l $OUT/libvulkan-1.a
     VKLIBS="-L$OUT -lvulkan-1"
-  else
+  elif [ "$TGR_TARGET" != *linux* ]; then
     VKLIBS="-L$VK/lib -lvulkan"
   fi
 fi
 GLLIBS=
 if [ "$RENDER" = gl ]; then
-  if [ -n "$EXE" ]; then GLLIBS="-lopengl32 -lgdi32"; else GLLIBS="-framework OpenGL"; fi
+  case "$TGR_TARGET" in
+    *linux*) GLLIBS="-lEGL -lwayland-egl"
+             pkg-config --exists egl wayland-egl || { echo "link: missing EGL / wayland-egl (render gl)" >&2; exit 1; };;
+    *)       if [ -n "$EXE" ]; then GLLIBS="-lopengl32 -lgdi32"; else GLLIBS="-framework OpenGL"; fi;;
+  esac
 fi
 LIBS="$ZLIB"
 case "$HOST" in
@@ -96,6 +109,17 @@ case "$HOST" in
   lib)   ;;                                    # the app's own
   windows) SRCS="$SRCS $H/windows/host_windows.c"
            LIBS="$LIBS -lgdi32 -luser32 -lshell32 -lole32 -luuid -lmfplat -lmfreadwrite -lmfuuid -lxinput9_1_0 -mwindows";;
+  linux) case "$TGR_TARGET" in *linux*|"") ;; *) echo "link: HOST=linux needs a compiler for Linux" >&2; exit 2;; esac
+         SRCS="$SRCS $H/linux/host_linux.c $H/linux/xdg-shell-protocol.c $H/linux/xdg-decoration-protocol.c"
+         pkg-config --exists wayland-client xkbcommon alsa ||
+           { echo "link: missing wayland-client, xkbcommon or alsa" >&2; exit 1; }
+         LIBS="$LIBS $(pkg-config --libs wayland-client xkbcommon alsa)"
+         if pkg-config --exists libavformat libavcodec libswresample libavutil; then
+           HFLAGS="-DBR_HAVE_FFMPEG $(pkg-config --cflags libavformat libavcodec libswresample libavutil)"
+           LIBS="$LIBS $(pkg-config --libs libavformat libavcodec libswresample libavutil)"
+         else
+           echo "link: FFmpeg not found: the music will be silent" >&2
+         fi;;
   *) echo "link: unknown HOST $HOST" >&2; exit 2;;
 esac
 OBJS=
@@ -103,9 +127,12 @@ for s in $SRCS; do
   o=$OUT/plat/$(echo "$s" | sed 's#/#__#g').o
   case "$s" in */render/metal/*) XF=-fobjc-arc;; *) XF=;; esac   # the Metal renderer is ARC
   [ "$HOST" = lib ] && [ "$s" = $P/os/main.c ] && XF=-Dmain=tgr_main   # the app owns main()
-  if [ "$s" = "$OSHOST" ] || [ "$s" = "$H/windows/host_windows.c" ] || [ "$s" = ports/brally/platform/render/gl/gl_ctx.c ]; then
+  if [ "$s" = "$OSHOST" ] || [ "$s" = "$H/windows/host_windows.c" ] || \
+     [ "$s" = "$H/linux/host_linux.c" ] || [ "$s" = "$H/linux/xdg-shell-protocol.c" ] || \
+     [ "$s" = "$H/linux/xdg-decoration-protocol.c" ] || \
+     [ "$s" = ports/brally/platform/render/gl/gl_ctx.c ]; then
     # the OS layer sees the real system headers, not the game's
-    $CC -O2 ${GFLAG:--g} -std=gnu11 -Wall -I$H -c "$s" -o "$o"
+    $CC -O2 ${GFLAG:--g} -std=gnu11 -Wall -I$H $HFLAGS -c "$s" -o "$o"
   else
     $CC -c $PFLAGS $XF "$s" -o "$o"
   fi

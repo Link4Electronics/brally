@@ -1,0 +1,5 @@
+// The Android Gradle plugin. Needs Gradle 8.7+ and a JDK 17 (build.sh says
+// how to set both); compileSdk 34 is installed by the Android SDK manager.
+plugins {
+    id 'com.android.application' version '8.5.2' apply false
+}

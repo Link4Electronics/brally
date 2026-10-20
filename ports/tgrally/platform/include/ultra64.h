@@ -152,7 +152,7 @@ extern "C" {
 /* the game's view of the machine */
 extern int32_t  osTvType;
 extern uint32_t osMemSize;
-extern uint64_t osClockRate;
+extern unsigned long long osClockRate;      /* as u64 is (tgr/ultra.h, the game's own) */
 extern uint32_t osRomBase;
 extern int32_t  osResetType;
 
